@@ -1,26 +1,83 @@
-# Robots.txt for OmniDownloader Pro
-# https://www.instagram.com/omnidownloader/
+# Robots.txt for OmniDownloader Pro (Universal Media & Audio Downloader)
+# Author: Mo Shamas
+# Live URL: https://omnidownloader-u8w9.onrender.com/
 
 User-agent: *
 Allow: /
 Allow: /api/health
+Allow: /sitemap.xml
 Disallow: /api/admin/
 Disallow: /api/auth/
 
-# Crawlers & Bots
+# Google Search Engine Crawlers
 User-agent: Googlebot
 Allow: /
 
 User-agent: Googlebot-Image
 Allow: /
 
+User-agent: Googlebot-Video
+Allow: /
+
+User-agent: Googlebot-Mobile
+Allow: /
+
+User-agent: Mediapartners-Google
+Allow: /
+
+# Microsoft Bing & Yahoo Crawlers
 User-agent: Bingbot
 Allow: /
 
+User-agent: msnbot
+Allow: /
+
+User-agent: BingPreview
+Allow: /
+
+# DuckDuckGo
 User-agent: DuckDuckBot
+Allow: /
+
+# Yandex (Europe & Global)
+User-agent: Yandex
 Allow: /
 
 User-agent: YandexBot
 Allow: /
 
+User-agent: YandexImages
+Allow: /
+
+User-agent: YandexVideo
+Allow: /
+
+# Apple Siri & Spotlight
+User-agent: Applebot
+Allow: /
+
+# Baidu & Asian Search Engines
+User-agent: Baiduspider
+Allow: /
+
+User-agent: Sogou spider
+Allow: /
+
+# Social Media Previews
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: Pinterestbot
+Allow: /
+
+# Direct Sitemap Location for all Webmasters
 Sitemap: https://omnidownloader-u8w9.onrender.com/sitemap.xml

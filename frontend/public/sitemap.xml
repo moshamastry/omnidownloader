@@ -1,41 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
         xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Main Homepage (Universal Downloader) -->
   <url>
     <loc>https://omnidownloader-u8w9.onrender.com/</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+
+  <!-- YouTube Video & 4K Downloader -->
   <url>
-    <loc>https://omnidownloader.com/#youtube-downloader</loc>
+    <loc>https://omnidownloader-u8w9.onrender.com/#youtube-downloader</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
+
+  <!-- Instagram Reels, Stories & Posts Saver -->
   <url>
-    <loc>https://omnidownloader.com/#instagram-reels-downloader</loc>
+    <loc>https://omnidownloader-u8w9.onrender.com/#instagram-reels-downloader</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
+
+  <!-- TikTok Downloader (Zero Watermark) -->
   <url>
-    <loc>https://omnidownloader.com/#tiktok-downloader</loc>
+    <loc>https://omnidownloader-u8w9.onrender.com/#tiktok-downloader</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
+
+  <!-- Facebook Video & Watch Saver -->
   <url>
-    <loc>https://omnidownloader.com/#facebook-video-downloader</loc>
+    <loc>https://omnidownloader-u8w9.onrender.com/#facebook-video-downloader</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
+
+  <!-- High-Bitrate 320kbps MP3 Audio Converter -->
   <url>
-    <loc>https://omnidownloader.com/#mp3-converter</loc>
+    <loc>https://omnidownloader-u8w9.onrender.com/#mp3-converter</loc>
     <lastmod>2026-08-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
+
+  <!-- Twitter / X Video & GIF Saver -->
+  <url>
+    <loc>https://omnidownloader-u8w9.onrender.com/#twitter-video-downloader</loc>
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Pinterest Idea Pin & Video Saver -->
+  <url>
+    <loc>https://omnidownloader-u8w9.onrender.com/#pinterest-downloader</loc>
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Batch & Bulk Downloader -->
+  <url>
+    <loc>https://omnidownloader-u8w9.onrender.com/#bulk-downloader</loc>
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+
 </urlset>

@@ -56,7 +56,22 @@ const broadcastProgress = (progress: DownloadProgress) => {
   }
 };
 
+// Broadcast helper for announcements / notifications
+const broadcastNotification = (announcement: any) => {
+  const msg = JSON.stringify({
+    type: 'announcement_broadcast',
+    data: announcement,
+  });
+
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(msg);
+    }
+  }
+};
+
 (app as any).broadcastProgress = broadcastProgress;
+(app as any).broadcastNotification = broadcastNotification;
 
 // Listen to bulk queue service updates and broadcast
 queueService.onUpdate((item, batchSummary) => {
@@ -73,6 +88,51 @@ queueService.onUpdate((item, batchSummary) => {
       client.send(msg);
     }
   }
+});
+
+// SEO: Sitemap & Robots endpoints for Google Search Console
+app.get('/robots.txt', (_req, res) => {
+  const possibleRobots = [
+    path.resolve(process.cwd(), 'frontend/public/robots.txt'),
+    path.resolve(process.cwd(), 'frontend/dist/robots.txt'),
+    path.resolve(__dirname, '../../frontend/public/robots.txt'),
+  ];
+  for (const r of possibleRobots) {
+    if (fs.existsSync(r)) {
+      return res.type('text/plain').sendFile(r);
+    }
+  }
+  res.type('text/plain').send('User-agent: *\nAllow: /\nSitemap: https://omnidownloader.com/sitemap.xml');
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  const possibleSitemaps = [
+    path.resolve(process.cwd(), 'frontend/public/sitemap.xml'),
+    path.resolve(process.cwd(), 'frontend/dist/sitemap.xml'),
+    path.resolve(__dirname, '../../frontend/public/sitemap.xml'),
+  ];
+  for (const s of possibleSitemaps) {
+    if (fs.existsSync(s)) {
+      return res.type('application/xml').sendFile(s);
+    }
+  }
+  res.status(404).send('Sitemap not found');
+});
+
+// Google Search Console Site Verification Handler
+app.get('/google:code.html', (req, res) => {
+  const fileName = `google${req.params.code}.html`;
+  const possiblePaths = [
+    path.resolve(process.cwd(), `frontend/public/${fileName}`),
+    path.resolve(process.cwd(), `frontend/dist/${fileName}`),
+    path.resolve(__dirname, `../../frontend/public/${fileName}`),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return res.type('text/html').sendFile(p);
+    }
+  }
+  res.type('text/html').send(`google-site-verification: google${req.params.code}.html`);
 });
 
 // Serve frontend static build if available

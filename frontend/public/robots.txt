@@ -1,0 +1,26 @@
+# Robots.txt for OmniDownloader Pro
+# https://www.instagram.com/omnidownloader/
+
+User-agent: *
+Allow: /
+Allow: /api/health
+Disallow: /api/admin/
+Disallow: /api/auth/
+
+# Crawlers & Bots
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+Sitemap: https://omnidownloader-u8w9.onrender.com/sitemap.xml

@@ -26,8 +26,8 @@
     "react",
     "yt-dlp"
   ],
-  "author": "Mohammad Shamas (@mo.shamas) <https://www.instagram.com/mo.shamas>",
-  "homepage": "https://www.instagram.com/mo.shamas",
+  "author": "Mo Shamas",
+  "homepage": "https://www.instagram.com/omnidownloader/",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^9.1.2",

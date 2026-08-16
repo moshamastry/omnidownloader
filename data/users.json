@@ -1,12 +1,82 @@
 [
   {
+    "id": "usr_admin_moshams",
+    "email": "moshams643@gmail.com",
+    "name": "Moshams Admin",
+    "passwordHash": "2ce2c92cc7381ac803d299880d78c2c2bdf32d0564dc1a390d2458f83521bd48",
+    "isPro": true,
+    "role": "admin",
+    "createdAt": 1786801000000,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_admin_newsjio",
+    "email": "newsjioonline@gmail.com",
+    "name": "NewsJio Admin",
+    "passwordHash": "2ce2c92cc7381ac803d299880d78c2c2bdf32d0564dc1a390d2458f83521bd48",
+    "isPro": true,
+    "role": "admin",
+    "createdAt": 1786801000000,
+    "totalDownloads": 0
+  },
+  {
     "id": "usr_admin_master",
     "email": "admin@omni.pro",
     "name": "Master Admin",
     "passwordHash": "d482b3d1b3106685a3c675162d7bf5095b90216b4a57d01642d0b5df6c0588c4",
     "isPro": true,
     "role": "admin",
-    "createdAt": 1786799947064,
+    "createdAt": 1786798635463,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_1786797976573_3pk2r",
+    "email": "alex@omni.pro",
+    "name": "Alex Creator",
+    "passwordHash": "14674c13c4f8cfd43d8e735f4b87bb95bf5623fbf9d3258be5477fe585f944ff",
+    "isPro": true,
+    "role": "moderator",
+    "createdAt": 1786797976573,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_1786798319966_eezzl",
+    "email": "user_5794@omni.pro",
+    "name": "Pro Creator",
+    "passwordHash": "eaf2e04177ec6faf8b4b3b43eb66cff65783d068f16953529d761ce584c70884",
+    "isPro": true,
+    "role": "user",
+    "createdAt": 1786798319966,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_1786798379360_zu5tr",
+    "email": "user_2415@omni.pro",
+    "name": "Pro Creator",
+    "passwordHash": "eaf2e04177ec6faf8b4b3b43eb66cff65783d068f16953529d761ce584c70884",
+    "isPro": true,
+    "role": "user",
+    "createdAt": 1786798379360,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_1786799297923_oocbs",
+    "email": "mohdshams7299@gmail.com",
+    "name": "test",
+    "passwordHash": "7824a512549c4e8731db7297e07b18e9bba1104a03e6e4f14d796b00b3dbf90c",
+    "isPro": true,
+    "role": "user",
+    "createdAt": 1786799297923,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_1786800896072_ad01f",
+    "email": "mohdshams7300@gmail.com",
+    "name": "test 7300",
+    "passwordHash": "f4a6b4141173696e2f697c1ecb7ea100a9d4425281089b432c01ffb0f884adb6",
+    "isPro": true,
+    "role": "user",
+    "createdAt": 1786800896072,
     "totalDownloads": 0
   }
 ]

@@ -29,6 +29,7 @@ import { api } from '../../services/api';
 import { wsService } from '../../services/websocket';
 import { PlatformBadge } from '../ui/PlatformBadge';
 import { useAuth } from '../../context/AuthContext';
+import { historyStorage } from '../../services/historyStorage';
 
 export const BulkDownloader: React.FC = () => {
   const { isPro, quota, openAuthModal, refreshQuota } = useAuth();
@@ -63,6 +64,21 @@ export const BulkDownloader: React.FC = () => {
   // Subscribe to WebSocket updates for queue items
   useEffect(() => {
     const unsubProgress = wsService.onProgress((p) => {
+      if (p.status === 'completed' && p.filename) {
+        historyStorage.addItem({
+          id: p.id || String(Date.now()),
+          url: p.id,
+          title: p.filename,
+          duration: '--',
+          platform: 'Batch',
+          filename: p.filename,
+          filepath: p.filename,
+          fileSize: p.totalBytes || 0,
+          preset: 'batch-mp4',
+          completedAt: Date.now(),
+        });
+      }
+
       setQueueItems((prev) =>
         prev.map((item) => {
           if (item.id === p.id) {

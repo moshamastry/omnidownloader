@@ -7,11 +7,15 @@ import {
   Clock, 
   HardDrive, 
   Film, 
-  RotateCcw
+  RotateCcw,
+  ShieldCheck,
+  Lock,
+  Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HistoryItem } from '../../types';
 import { api } from '../../services/api';
+import { historyStorage } from '../../services/historyStorage';
 import { PlatformBadge } from '../ui/PlatformBadge';
 
 interface DownloadHistoryProps {
@@ -23,41 +27,44 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
   const [search, setSearch] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const fetchHistory = async () => {
+  const loadLocalHistory = () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const items = await api.getHistory();
+      const items = historyStorage.getHistory();
       setHistory(items);
     } catch {
-      toast.error('Failed to load history');
+      toast.error('Failed to load local history');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
+    loadLocalHistory();
+
+    const handleUpdate = () => {
+      loadLocalHistory();
+    };
+
+    window.addEventListener('omni_history_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('omni_history_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await api.deleteHistoryItem(id);
-      setHistory((prev) => prev.filter((i) => i.id !== id));
-      toast.success('Removed from history');
-    } catch {
-      toast.error('Failed to delete item');
-    }
+  const handleDelete = (id: string) => {
+    historyStorage.deleteItem(id);
+    setHistory((prev) => prev.filter((i) => i.id !== id));
+    toast.success('Removed from history');
   };
 
-  const handleClearAll = async () => {
-    if (!window.confirm('Are you sure you want to clear all download history?')) return;
-    try {
-      await api.clearHistory();
-      setHistory([]);
-      toast.success('Download history cleared');
-    } catch {
-      toast.error('Failed to clear history');
-    }
+  const handleClearAll = () => {
+    if (!window.confirm('Are you sure you want to clear your private download history?')) return;
+    historyStorage.clearAll();
+    setHistory([]);
+    toast.success('Download history cleared');
   };
 
   const handleOpenFolder = async (filepath?: string) => {
@@ -89,9 +96,9 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
   const filteredHistory = history.filter((item) => {
     const q = search.toLowerCase();
     return (
-      item.title.toLowerCase().includes(q) ||
-      item.url.toLowerCase().includes(q) ||
-      item.platform.toLowerCase().includes(q)
+      (item.title || '').toLowerCase().includes(q) ||
+      (item.url || '').toLowerCase().includes(q) ||
+      (item.platform || '').toLowerCase().includes(q)
     );
   });
 
@@ -100,15 +107,15 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-0.5 text-xs font-bold text-brand-600 dark:text-brand-400 mb-2">
-            <HistoryIcon className="h-3.5 w-3.5" />
-            <span>Activity Log</span>
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+            <Lock className="h-3.5 w-3.5" />
+            <span>100% Private Client Storage</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Download History
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            View, open, or re-download your saved media files.
+            Your personal activity is stored strictly in your browser. Nobody else can see your downloads.
           </p>
         </div>
 
@@ -123,6 +130,14 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
         )}
       </div>
 
+      {/* Privacy Guarantee Card */}
+      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+        <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0" />
+        <p className="leading-relaxed">
+          <strong>Zero-Log Privacy:</strong> What you download is stored only inside your own device storage. The server never tracks, shares, or logs your download links. You can delete items or clear all data anytime.
+        </p>
+      </div>
+
       {/* Search Bar */}
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
@@ -132,7 +147,7 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search history by title, URL or platform..."
+          placeholder="Search your private downloads by title, URL or platform..."
           className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 py-3 pl-10 pr-4 text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 shadow-sm"
         />
       </div>
@@ -149,7 +164,7 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
           <HistoryIcon className="h-12 w-12 text-slate-400 mx-auto" />
           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No download history found</p>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {search ? 'No downloads match your search query.' : 'Downloaded videos and audio files will appear here.'}
+            {search ? 'No downloads match your search query.' : 'Videos and audio files downloaded on this device will appear here privately.'}
           </p>
         </div>
       ) : (
@@ -193,6 +208,17 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
 
               {/* Right Action Buttons */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                {item.filename && (
+                  <a
+                    href={api.getFileDownloadUrl(item.filename)}
+                    download={item.filename}
+                    className="p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors shadow-sm"
+                    title="Download file to device again"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
+                )}
+
                 <button
                   onClick={() => handleOpenFolder(item.filepath)}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shadow-sm"
@@ -206,7 +232,7 @@ export const DownloadHistory: React.FC<DownloadHistoryProps> = ({ onRedownload }
                   <button
                     onClick={() => onRedownload(item.url)}
                     className="p-2 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors shadow-sm"
-                    title="Download again"
+                    title="Redownload video from source"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </button>

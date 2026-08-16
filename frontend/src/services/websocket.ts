@@ -1,13 +1,15 @@
-import { DownloadProgress, QueueItem, BatchSummary } from '../types';
+import { DownloadProgress, QueueItem, BatchSummary, Announcement } from '../types';
 
 type ProgressCallback = (progress: DownloadProgress) => void;
 type QueueCallback = (item: QueueItem, batchSummary: BatchSummary) => void;
+type AnnouncementCallback = (announcement: Announcement) => void;
 
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectTimer: any = null;
   private progressListeners: Set<ProgressCallback> = new Set();
   private queueListeners: Set<QueueCallback> = new Set();
+  private announcementListeners: Set<AnnouncementCallback> = new Set();
 
   public connect() {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
@@ -49,6 +51,10 @@ class WebSocketService {
             for (const listener of this.queueListeners) {
               listener(payload.data.item, payload.data.batchSummary);
             }
+          } else if (payload.type === 'announcement_broadcast') {
+            for (const listener of this.announcementListeners) {
+              listener(payload.data);
+            }
           }
         } catch (err) {
           console.error('Error handling WS message:', err);
@@ -81,6 +87,13 @@ class WebSocketService {
     this.queueListeners.add(callback);
     return () => {
       this.queueListeners.delete(callback);
+    };
+  }
+
+  public onAnnouncement(callback: AnnouncementCallback) {
+    this.announcementListeners.add(callback);
+    return () => {
+      this.announcementListeners.delete(callback);
     };
   }
 }

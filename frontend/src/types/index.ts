@@ -144,4 +144,14 @@ export interface QuotaStatus {
   };
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'alert';
+  createdAt: number;
+  createdBy?: string;
+  active: boolean;
+}
+
 export type ActiveTab = 'single' | 'bulk' | 'history' | 'settings' | 'platforms';

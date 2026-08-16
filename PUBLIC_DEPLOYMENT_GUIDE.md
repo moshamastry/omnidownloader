@@ -1,7 +1,7 @@
 # 🌐 OmniDownloader Pro — Complete Public Live Deployment & Custom Domain Guide
 
-> **Creator & Developer Credits**: Mohammad Shamas ([@mo.shamas on Instagram](https://www.instagram.com/mo.shamas))  
-> **Official Community**: [X / Twitter](https://x.com/OmniDownloaderme) • [Facebook](https://www.facebook.com/profile.php?id=61593168399104)
+> **Creator & Developer Credits**: Mo Shamas  
+> **Official Community**: [Instagram (@omnidownloader)](https://www.instagram.com/omnidownloader/) • [X / Twitter](https://x.com/OmniDownloaderme) • [Facebook](https://www.facebook.com/profile.php?id=61593168399104)
 
 ---
 
@@ -119,14 +119,11 @@ Aapka tool port 4000 par 24/7 background me live rahega!
 
 ---
 
-## 📱 Mohammad Shamas (@mo.shamas) Social Integration Checklist
+## 📱 Official Brand & Developer Social Integration Checklist
 
-Aapke social handles har jagah integrated hain:
-
-* [x] **Top Navbar**: Official Instagram gradient badge `@mo.shamas` + X/Twitter + Facebook buttons.
-* [x] **Desktop Sidebar**: "Developer & Community" dedicated card with **Follow @mo.shamas** (Instagram gradient button).
-* [x] **Modern Page Footer**: "Crafted with ❤️ by Mohammad Shamas (@mo.shamas)" with direct Instagram link.
-* [x] **Settings Modal**: Developer profile and 1-click Instagram connect.
-* [x] **Terms / Legal Disclaimer**: Creator attribution link.
-* [x] **HTML Metadata & OpenGraph**: SEO meta tags with author `@mo.shamas` and Instagram link for Google & Social Media previews.
-* [x] **package.json**: Updated with creator name and official Instagram link.
+* [x] **Creator Name**: Clean professional credit as **Mo Shamas** across Footer, Settings, and Metadata.
+* [x] **Top Navbar**: Official Instagram gradient badge `@omnidownloader` (`https://www.instagram.com/omnidownloader/`) + X/Twitter + Facebook.
+* [x] **Desktop Sidebar**: "Developer & Community" dedicated card with **Follow @omnidownloader**.
+* [x] **Modern Page Footer**: "Crafted with ❤️ by Mo Shamas" with direct link to official `@omnidownloader`.
+* [x] **HTML Metadata & OpenGraph**: SEO meta tags with author `Mo Shamas` and official Instagram link for Google & Social Media previews.
+* [x] **package.json**: Updated with creator name `Mo Shamas` and official homepage `https://www.instagram.com/omnidownloader/`.

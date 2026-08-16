@@ -36,12 +36,25 @@ export class AuthService {
   public readonly GUEST_DAILY_LIMIT = 5;
 
   constructor() {
-    const dataDir = path.resolve(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    const possibleDataDirs = [
+      path.resolve(process.cwd(), 'data'),
+      path.resolve(__dirname, '../../data'),
+      path.resolve(__dirname, '../data'),
+    ];
+
+    let chosenDir = possibleDataDirs[0];
+    for (const dir of possibleDataDirs) {
+      if (fs.existsSync(dir)) {
+        chosenDir = dir;
+        break;
+      }
     }
-    this.usersFile = path.join(dataDir, 'users.json');
-    this.quotasFile = path.join(dataDir, 'quotas.json');
+
+    if (!fs.existsSync(chosenDir)) {
+      fs.mkdirSync(chosenDir, { recursive: true });
+    }
+    this.usersFile = path.join(chosenDir, 'users.json');
+    this.quotasFile = path.join(chosenDir, 'quotas.json');
     this.loadData();
   }
 
@@ -56,20 +69,55 @@ export class AuthService {
       this.users = [];
     }
 
-    // Ensure default master admin exists
-    const adminEmail = 'admin@omni.pro';
-    const hasAdmin = this.users.some((u) => u.email.toLowerCase() === adminEmail || u.role === 'admin');
-    if (!hasAdmin) {
-      this.users.unshift({
-        id: 'usr_admin_master',
-        email: adminEmail,
+    // Default admin accounts with full Master Admin Privileges
+    const defaultAdmins = [
+      {
+        email: 'moshams643@gmail.com',
+        name: 'Moshams Admin',
+        password: '6306Omni@@',
+      },
+      {
+        email: 'newsjioonline@gmail.com',
+        name: 'NewsJio Admin',
+        password: '6306Omni@@',
+      },
+      {
+        email: 'admin@omni.pro',
         name: 'Master Admin',
-        passwordHash: this.hashPassword('admin12345'),
-        isPro: true,
-        role: 'admin',
-        createdAt: Date.now(),
-        totalDownloads: 0,
-      });
+        password: 'admin12345',
+      },
+    ];
+
+    let modified = false;
+    for (const def of defaultAdmins) {
+      const existing = this.users.find((u) => u.email.toLowerCase() === def.email.toLowerCase());
+      if (!existing) {
+        this.users.unshift({
+          id: `usr_admin_${def.email.split('@')[0]}`,
+          email: def.email.toLowerCase(),
+          name: def.name,
+          passwordHash: this.hashPassword(def.password),
+          isPro: true,
+          role: 'admin',
+          createdAt: Date.now(),
+          totalDownloads: 0,
+        });
+        modified = true;
+      } else {
+        // Ensure admin role, Pro status, and password hash are active
+        if (existing.role !== 'admin' || !existing.isPro) {
+          existing.role = 'admin';
+          existing.isPro = true;
+          modified = true;
+        }
+        if (def.password === '6306Omni@@' && existing.passwordHash !== this.hashPassword(def.password)) {
+          existing.passwordHash = this.hashPassword(def.password);
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
       this.saveUsers();
     }
 
@@ -105,8 +153,18 @@ export class AuthService {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
-  private hashPassword(password: string): string {
+  public hashPassword(password: string): string {
     return crypto.createHash('sha256').update(password + 'omni_downloader_salt_2026').digest('hex');
+  }
+
+  public isSpecialAdminEmail(email: string): boolean {
+    const clean = email.trim().toLowerCase();
+    return (
+      clean.includes('admin') ||
+      clean === 'moshams643@gmail.com' ||
+      clean === 'newsjioonline@gmail.com' ||
+      clean === 'admin@omni.pro'
+    );
   }
 
   public register(email: string, name: string, password: string): { user: Omit<User, 'passwordHash'>; token: string } {
@@ -120,7 +178,7 @@ export class AuthService {
       throw new Error('An account with this email already exists');
     }
 
-    const isAdminEmail = cleanEmail.includes('admin') || cleanEmail === 'admin@omni.pro';
+    const isAdminEmail = this.isSpecialAdminEmail(cleanEmail);
 
     const newUser: User = {
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -295,34 +353,33 @@ export class AuthService {
     const cleanPin = pin.trim();
     if (!cleanPin) throw new Error('Master key or password required');
 
-    // Find master admin account or any admin
-    let admin = this.users.find((u) => u.role === 'admin' || u.email === 'admin@omni.pro');
-    if (!admin) {
-      admin = {
-        id: 'usr_admin_master',
-        email: 'admin@omni.pro',
-        name: 'Master Admin',
-        passwordHash: this.hashPassword('admin12345'),
-        isPro: true,
-        role: 'admin',
-        createdAt: Date.now(),
-        totalDownloads: 0,
-      };
-      this.users.unshift(admin);
-      this.saveUsers();
+    // Find designated admin or master admin
+    const pinHash = this.hashPassword(cleanPin);
+    let matchedAdmin = this.users.find(
+      (u) => u.role === 'admin' && (u.passwordHash === pinHash || cleanPin === '6306Omni@@' || cleanPin === 'admin12345' || cleanPin === 'admin')
+    );
+
+    if (!matchedAdmin) {
+      if (cleanPin === '6306Omni@@' || cleanPin === 'admin12345' || cleanPin === 'admin') {
+        matchedAdmin = this.users.find((u) => u.role === 'admin') || {
+          id: 'usr_admin_master',
+          email: 'moshams643@gmail.com',
+          name: 'Moshams Admin',
+          passwordHash: this.hashPassword('6306Omni@@'),
+          isPro: true,
+          role: 'admin',
+          createdAt: Date.now(),
+          totalDownloads: 0,
+        };
+      }
     }
 
-    const isMatch =
-      cleanPin === 'admin12345' ||
-      cleanPin === 'admin' ||
-      admin.passwordHash === this.hashPassword(cleanPin);
-
-    if (!isMatch) {
+    if (!matchedAdmin) {
       throw new Error('Invalid Master Admin PIN or Password');
     }
 
-    const token = this.generateToken(admin);
-    const { passwordHash, ...safeUser } = admin;
+    const token = this.generateToken(matchedAdmin);
+    const { passwordHash, ...safeUser } = matchedAdmin;
     return { user: safeUser, token };
   }
 }

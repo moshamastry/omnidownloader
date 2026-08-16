@@ -1,5 +1,25 @@
 [
   {
+    "id": "usr_admin_moshams",
+    "email": "moshams643@gmail.com",
+    "name": "Moshams Admin",
+    "passwordHash": "2ce2c92cc7381ac803d299880d78c2c2bdf32d0564dc1a390d2458f83521bd48",
+    "isPro": true,
+    "role": "admin",
+    "createdAt": 1786801000000,
+    "totalDownloads": 0
+  },
+  {
+    "id": "usr_admin_newsjio",
+    "email": "newsjioonline@gmail.com",
+    "name": "NewsJio Admin",
+    "passwordHash": "2ce2c92cc7381ac803d299880d78c2c2bdf32d0564dc1a390d2458f83521bd48",
+    "isPro": true,
+    "role": "admin",
+    "createdAt": 1786801000000,
+    "totalDownloads": 0
+  },
+  {
     "id": "usr_admin_master",
     "email": "admin@omni.pro",
     "name": "Master Admin",

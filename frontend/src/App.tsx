@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Toaster } from 'react-hot-toast';
-import { Film, Layers, History, Settings, Sparkles } from 'lucide-react';
+import { Toaster, toast } from 'react-hot-toast';
+import { 
+  Film, 
+  Layers, 
+  History, 
+  Settings, 
+  Sparkles, 
+  Bell, 
+  X, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Info, 
+  AlertCircle 
+} from 'lucide-react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/layout/Navbar';
@@ -13,36 +25,102 @@ import { DisclaimerModal } from './components/disclaimer/DisclaimerModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { AdminModal } from './components/admin/AdminModal';
 import { Footer } from './components/layout/Footer';
-import { ActiveTab } from './types';
+import { ActiveTab, Announcement } from './types';
 import { wsService } from './services/websocket';
+import { api } from './services/api';
 
 export const AppContent: React.FC = () => {
+  const { user, isStaff, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<ActiveTab>('single');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState<boolean>(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [pastedUrl, setPastedUrl] = useState<string>('');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>([]);
   const { isDark } = useTheme();
 
   useEffect(() => {
     wsService.connect();
 
+    // Fetch initial active announcements
+    api.getAnnouncements()
+      .then((items) => {
+        if (Array.isArray(items)) {
+          setAnnouncements(items);
+        }
+      })
+      .catch(() => {});
+
+    // Listen to real-time live announcement broadcasts via WebSocket
+    const unsubAnnouncements = wsService.onAnnouncement((newAnn) => {
+      setAnnouncements((prev) => [newAnn, ...prev.filter((a) => a.id !== newAnn.id)]);
+      toast.custom(
+        (t) => (
+          <div
+            className={`${
+              t.visible ? 'animate-enter' : 'animate-leave'
+            } max-w-md w-full bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-white/20 p-4`}
+          >
+            <div className="flex-1 w-0">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-purple-500/20 rounded-xl text-purple-300">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-purple-300 uppercase tracking-wider">
+                    📢 Admin Broadcast Notification
+                  </p>
+                  <p className="text-sm font-bold text-white mt-0.5">
+                    {newAnn.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    {newAnn.message}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+    });
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Hotkey: Ctrl + Shift + A or Alt + A opens Admin Console
+      // Hotkey: Ctrl + Shift + A or Alt + A
       if ((e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) || (e.altKey && (e.key === 'A' || e.key === 'a'))) {
+        // Strict security: If user is logged in but NOT admin/staff, completely ignore
+        if (user && !isStaff) {
+          return;
+        }
         e.preventDefault();
         setIsAdminModalOpen((prev) => !prev);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      unsubAnnouncements();
+    };
+  }, [user, isStaff]);
 
   const handlePasteDetected = (url: string) => {
     setPastedUrl(url);
     setActiveTab('single');
   };
+
+  const visibleAnnouncements = announcements.filter(
+    (a) => a.active && !dismissedAnnouncements.includes(a.id)
+  );
 
   const mobileNavItems: Array<{ id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'single', label: 'Single', icon: Film },
@@ -63,6 +141,36 @@ export const AppContent: React.FC = () => {
           duration: 4000,
         }}
       />
+
+      {/* Top Live Broadcast Announcement Banner */}
+      {visibleAnnouncements.length > 0 && (
+        <div className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-3 sm:px-6 py-2 shadow-md flex items-center justify-between gap-3 text-xs z-50">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="p-1 rounded-lg bg-white/20 text-white shrink-0">
+              <Bell className="w-3.5 h-3.5" />
+            </span>
+            <span className="font-black uppercase tracking-wider text-[10px] bg-black/20 px-1.5 py-0.5 rounded shrink-0">
+              Announcement
+            </span>
+            <span className="font-bold truncate">
+              {visibleAnnouncements[0].title}:
+            </span>
+            <span className="truncate opacity-90 hidden sm:inline">
+              {visibleAnnouncements[0].message}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setDismissedAnnouncements((prev) => [...prev, visibleAnnouncements[0].id])}
+              className="p-1 rounded-lg bg-white/10 hover:bg-white/25 text-white transition-colors"
+              title="Dismiss announcement"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top Navbar */}
       <Navbar
@@ -157,6 +265,7 @@ export const AppContent: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onOpenAdmin={() => setIsAdminModalOpen(true)}
       />
 
       <DisclaimerModal
@@ -176,4 +285,3 @@ export default function App() {
     </ThemeProvider>
   );
 }
-

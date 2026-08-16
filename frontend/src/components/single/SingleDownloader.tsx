@@ -28,6 +28,8 @@ import { api } from '../../services/api';
 import { wsService } from '../../services/websocket';
 import { PlatformBadge } from '../ui/PlatformBadge';
 import { useAuth } from '../../context/AuthContext';
+import { historyStorage } from '../../services/historyStorage';
+import { SeoContentSection } from '../seo/SeoContentSection';
 
 interface SingleDownloaderProps {
   initialUrl?: string;
@@ -78,6 +80,22 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
               filename: p.filename,
               url: fileUrl,
             });
+
+            // Save to private local browser history (100% Client-Side Privacy)
+            historyStorage.addItem({
+              id: p.id || String(Date.now()),
+              url: videoInfo?.webpageUrl || url,
+              title: videoInfo?.title || p.filename,
+              thumbnail: videoInfo?.thumbnail,
+              duration: videoInfo?.durationFormatted,
+              platform: videoInfo?.platform || 'Web',
+              filename: p.filename,
+              filepath: p.filename,
+              fileSize: p.totalBytes || 0,
+              preset: selectedPreset,
+              completedAt: Date.now(),
+            });
+
             // Automatically trigger device download for web browser visitors
             const a = document.createElement('a');
             a.href = fileUrl;
@@ -544,6 +562,9 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
           </div>
         </div>
       )}
+
+      {/* SEO Rich Landing Section (Google Rank Optimization) */}
+      <SeoContentSection />
     </div>
   );
 };

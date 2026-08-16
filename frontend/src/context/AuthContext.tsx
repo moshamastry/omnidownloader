@@ -33,6 +33,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('register');
 
+  const isSpecialAdmin = (email?: string): boolean => {
+    if (!email) return false;
+    const clean = email.toLowerCase().trim();
+    return (
+      clean.includes('admin') ||
+      clean === 'moshams643@gmail.com' ||
+      clean === 'newsjioonline@gmail.com' ||
+      clean === 'admin@omni.pro'
+    );
+  };
+
   const refreshQuota = async () => {
     try {
       const q = await api.getQuota();
@@ -43,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: q.user.email,
           name: q.user.name,
           isPro: q.user.isPro,
-          role: q.user.role || (q.user.email.toLowerCase().includes('admin') ? 'admin' : 'user'),
+          role: q.user.role || (isSpecialAdmin(q.user.email) ? 'admin' : 'user'),
           createdAt: Date.now(),
           totalDownloads: typeof q.usedToday === 'number' ? q.usedToday : 0,
         });
@@ -135,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const isPro = Boolean(user?.isPro || quota?.isPro);
-  const isAdmin = Boolean(user?.role === 'admin' || user?.email.toLowerCase().includes('admin'));
+  const isAdmin = Boolean(user?.role === 'admin' || isSpecialAdmin(user?.email));
   const isModerator = Boolean(user?.role === 'moderator');
   const isStaff = Boolean(isAdmin || isModerator);
 

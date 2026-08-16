@@ -7,6 +7,7 @@ import { queueService } from '../services/queue.service';
 import { historyService } from '../services/history.service';
 import { settingsService } from '../services/settings.service';
 import { authService } from '../services/auth.service';
+import { announcementService } from '../services/announcement.service';
 
 export const apiRouter = Router();
 
@@ -149,6 +150,78 @@ apiRouter.delete('/admin/users/:id', (req: Request, res: Response) => {
 
   const deleted = authService.deleteUser(String(req.params.id));
   res.json({ success: deleted });
+});
+
+// 0c. Announcement & Broadcast Routes
+apiRouter.get('/announcements', (_req: Request, res: Response) => {
+  const activeAnnouncements = announcementService.getAll(true);
+  res.json({ announcements: activeAnnouncements });
+});
+
+apiRouter.get('/admin/announcements', (req: Request, res: Response) => {
+  const token = getAuthToken(req);
+  const user = authService.verifyToken(token);
+  if (!user || (user.role !== 'admin' && user.role !== 'moderator' && !user.email.toLowerCase().includes('admin'))) {
+    return res.status(403).json({ error: 'Staff access required' });
+  }
+
+  const all = announcementService.getAll(false);
+  res.json({ announcements: all });
+});
+
+apiRouter.post('/admin/announcements', (req: Request, res: Response) => {
+  const token = getAuthToken(req);
+  const user = authService.verifyToken(token);
+  if (!user || (user.role !== 'admin' && !user.email.toLowerCase().includes('admin'))) {
+    return res.status(403).json({ error: 'Master Admin permission required to broadcast notifications' });
+  }
+
+  const { title, message, type } = req.body;
+  if (!title || !message) {
+    return res.status(400).json({ error: 'Title and message are required' });
+  }
+
+  try {
+    const created = announcementService.create({
+      title,
+      message,
+      type: type || 'info',
+      createdBy: user.name || user.email,
+    });
+
+    // Broadcast in real-time over WebSocket if server handler exists
+    const broadcastNotification = (req.app as any).broadcastNotification;
+    if (typeof broadcastNotification === 'function') {
+      broadcastNotification(created);
+    }
+
+    res.json({ success: true, announcement: created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create announcement' });
+  }
+});
+
+apiRouter.delete('/admin/announcements/:id', (req: Request, res: Response) => {
+  const token = getAuthToken(req);
+  const user = authService.verifyToken(token);
+  if (!user || (user.role !== 'admin' && !user.email.toLowerCase().includes('admin'))) {
+    return res.status(403).json({ error: 'Master Admin permission required' });
+  }
+
+  const deleted = announcementService.delete(String(req.params.id));
+  res.json({ success: deleted });
+});
+
+apiRouter.post('/admin/announcements/:id/toggle', (req: Request, res: Response) => {
+  const token = getAuthToken(req);
+  const user = authService.verifyToken(token);
+  if (!user || (user.role !== 'admin' && !user.email.toLowerCase().includes('admin'))) {
+    return res.status(403).json({ error: 'Master Admin permission required' });
+  }
+
+  const updated = announcementService.toggleActive(String(req.params.id));
+  if (!updated) return res.status(404).json({ error: 'Announcement not found' });
+  res.json({ success: true, announcement: updated });
 });
 
 // 1. Health check

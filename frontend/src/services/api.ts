@@ -1,4 +1,4 @@
-import { VideoMetadata, HistoryItem, AppSettings, BatchSummary, QueueItem, ChannelExtractResult, User, QuotaStatus } from '../types';
+import { VideoMetadata, HistoryItem, AppSettings, BatchSummary, QueueItem, ChannelExtractResult, User, QuotaStatus, Announcement } from '../types';
 
 const isFileOrElectron = typeof window !== 'undefined' && (
   window.location.protocol === 'file:' || 
@@ -140,6 +140,54 @@ export const api = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to delete user');
     return data.success;
+  },
+
+  // Announcements & Broadcasts
+  getAnnouncements: async (): Promise<Announcement[]> => {
+    const res = await fetch(`${API_BASE}/announcements`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.announcements || [];
+  },
+
+  getAdminAnnouncements: async (): Promise<Announcement[]> => {
+    const res = await fetch(`${API_BASE}/admin/announcements`, {
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch announcements');
+    return data.announcements || [];
+  },
+
+  sendAnnouncement: async (announcement: { title: string; message: string; type?: 'info' | 'success' | 'warning' | 'alert' }): Promise<Announcement> => {
+    const res = await fetch(`${API_BASE}/admin/announcements`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(announcement),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send broadcast');
+    return data.announcement;
+  },
+
+  deleteAnnouncement: async (id: string): Promise<boolean> => {
+    const res = await fetch(`${API_BASE}/admin/announcements/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to delete announcement');
+    return data.success;
+  },
+
+  toggleAnnouncement: async (id: string): Promise<Announcement> => {
+    const res = await fetch(`${API_BASE}/admin/announcements/${id}/toggle`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to toggle announcement');
+    return data.announcement;
   },
 
   // Health

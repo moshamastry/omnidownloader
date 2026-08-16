@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  omnidownloader:
+    build: .
+    container_name: omnidownloader_app
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
+      - ./downloads:/app/downloads

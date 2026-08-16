@@ -1,0 +1,12 @@
+[
+  {
+    "id": "usr_admin_master",
+    "email": "admin@omni.pro",
+    "name": "Master Admin",
+    "passwordHash": "d482b3d1b3106685a3c675162d7bf5095b90216b4a57d01642d0b5df6c0588c4",
+    "isPro": true,
+    "role": "admin",
+    "createdAt": 1786799947064,
+    "totalDownloads": 0
+  }
+]

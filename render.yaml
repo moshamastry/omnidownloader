@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: omnidownloader-pro
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /api/health

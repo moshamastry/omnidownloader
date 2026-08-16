@@ -1,0 +1,15 @@
+{
+  "name": "multi-downloader-electron",
+  "version": "1.0.0",
+  "description": "Electron desktop shell for Multi Social Media Downloader",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc && electron .",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "typescript": "^5.7.3",
+    "@types/node": "^22.13.4"
+  }
+}

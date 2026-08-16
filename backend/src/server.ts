@@ -135,6 +135,21 @@ app.get('/google:code.html', (req, res) => {
   res.type('text/html').send(`google-site-verification: google${req.params.code}.html`);
 });
 
+// Bing Webmaster Site Verification Handler
+app.get('/BingSiteAuth.xml', (_req, res) => {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'frontend/public/BingSiteAuth.xml'),
+    path.resolve(process.cwd(), 'frontend/dist/BingSiteAuth.xml'),
+    path.resolve(__dirname, '../../frontend/public/BingSiteAuth.xml'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return res.type('application/xml').sendFile(p);
+    }
+  }
+  res.type('application/xml').send('<?xml version="1.0"?>\n<users>\n\t<user>3BB7061DB6A87DFDC130DAACFE0BDBC9</user>\n</users>');
+});
+
 // Serve frontend static build if available
 const possibleFrontendPaths = [
   path.resolve(__dirname, '../../frontend/dist'),

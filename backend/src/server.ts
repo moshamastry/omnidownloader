@@ -150,6 +150,11 @@ app.get('/BingSiteAuth.xml', (_req, res) => {
   res.type('application/xml').send('<?xml version="1.0"?>\n<users>\n\t<user>3BB7061DB6A87DFDC130DAACFE0BDBC9</user>\n</users>');
 });
 
+// IndexNow Key verification endpoint for instant Bing, Yandex & DuckDuckGo indexing
+app.get('/8a649fb920a0491cbcd88db9a365f57f.txt', (_req, res) => {
+  res.type('text/plain').send('8a649fb920a0491cbcd88db9a365f57f');
+});
+
 // Serve frontend static build if available
 const possibleFrontendPaths = [
   path.resolve(__dirname, '../../frontend/dist'),

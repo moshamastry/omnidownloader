@@ -65,6 +65,20 @@ export class SettingsService {
 
       if (rawEnvCookies && rawEnvCookies.trim().length > 10) {
         let content = rawEnvCookies.trim();
+
+        // Strip enclosing quotes if passed by env manager
+        if (
+          (content.startsWith('"') && content.endsWith('"')) ||
+          (content.startsWith("'") && content.endsWith("'"))
+        ) {
+          content = content.slice(1, -1);
+        }
+
+        // Handle escaped \n, \r, and \t from JSON or single-line env vars
+        if (content.includes('\\n')) {
+          content = content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        }
+
         // Check if cookies content is Base64 encoded
         if (
           !content.includes('\t') &&
@@ -79,8 +93,14 @@ export class SettingsService {
           } catch {}
         }
 
+        // Write to data/env_cookies.txt, data/cookies.txt, and root cookies.txt for maximum compatibility
         fs.writeFileSync(this.envCookiesFile, content, 'utf-8');
-        console.log(`🍪 [SettingsService] Successfully loaded YouTube cookies from environment variable (${content.length} bytes).`);
+        fs.writeFileSync(this.cookiesFile, content, 'utf-8');
+        try {
+          fs.writeFileSync(path.resolve(process.cwd(), 'cookies.txt'), content, 'utf-8');
+        } catch {}
+
+        console.log(`🍪 [SettingsService] Successfully loaded & synchronized YouTube cookies (${content.length} bytes).`);
       }
     } catch (err: any) {
       console.error('⚠️ [SettingsService] Error writing env cookies:', err.message);
@@ -105,7 +125,14 @@ export class SettingsService {
     try {
       fs.writeFileSync(this.settingsFile, JSON.stringify(this.settings, null, 2), 'utf-8');
       if (this.settings.cookiesContent !== undefined) {
-        fs.writeFileSync(this.cookiesFile, this.settings.cookiesContent || '', 'utf-8');
+        let cleanCookies = (this.settings.cookiesContent || '').trim();
+        if (cleanCookies.includes('\\n')) {
+          cleanCookies = cleanCookies.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        }
+        fs.writeFileSync(this.cookiesFile, cleanCookies, 'utf-8');
+        try {
+          fs.writeFileSync(path.resolve(process.cwd(), 'cookies.txt'), cleanCookies, 'utf-8');
+        } catch {}
       }
     } catch (err) {
       console.error('Error saving settings:', err);

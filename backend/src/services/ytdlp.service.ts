@@ -1080,6 +1080,139 @@ export class YtDlpService {
     };
   }
 
+  /**
+   * Helper to execute yt-dlp download process with given parameters
+   */
+  private runYtDlpDownload(
+    resolvedUrl: string,
+    outputTemplate: string,
+    clientsStr: string,
+    preset: string,
+    customFormatId: string | undefined,
+    onProgress: (progress: DownloadProgress) => void,
+    id: string,
+    isCanceled: () => boolean,
+    setChild: (cp: any) => void
+  ): Promise<{ filename: string; filepath: string; size: number; code: number; lastError: string }> {
+    return new Promise((resolve) => {
+      const cookiesPath = settingsService.getCookiesFilePath();
+      const activeProxy = settingsService.getActiveProxy();
+
+      const args: string[] = [
+        '--newline',
+        '--no-playlist',
+        '--no-warnings',
+        '--socket-timeout', '30',
+        '--extractor-args', `youtube:player_client=${clientsStr}`,
+        '--concurrent-fragments', '5',
+        '--buffer-size', '1024k',
+        '--http-chunk-size', '10M',
+        '--retries', '10',
+        '--fragment-retries', '10',
+        '-o', outputTemplate,
+      ];
+
+      if (cookiesPath) {
+        args.push('--cookies', cookiesPath);
+      }
+
+      if (activeProxy) {
+        args.push('--proxy', activeProxy);
+      }
+
+      if (preset === 'best-video-mp4') {
+        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
+      } else if (preset === '1080p-mp4') {
+        args.push('-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4');
+      } else if (preset === '720p-mp4') {
+        args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format', 'mp4');
+      } else if (preset === '480p-mp4') {
+        args.push('-f', 'bv*[height<=480]+ba/b[height<=480]/b', '--merge-output-format', 'mp4');
+      } else if (preset === '360p-mp4') {
+        args.push('-f', 'bv*[height<=360]+ba/b[height<=360]/b', '--merge-output-format', 'mp4');
+      } else if (preset === 'mp3-320' || preset === 'best-audio-mp3') {
+        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '320K');
+      } else if (preset === 'mp3-128') {
+        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '128K');
+      } else if (preset === 'm4a-best' || preset === 'audio-m4a') {
+        args.push('-x', '--audio-format', 'm4a');
+      } else if (preset === 'audio-wav') {
+        args.push('-x', '--audio-format', 'wav');
+      } else if (customFormatId) {
+        args.push('-f', customFormatId);
+      } else {
+        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
+      }
+
+      args.push(resolvedUrl);
+
+      const cp = spawn(this.ytDlpPath, args);
+      setChild(cp);
+
+      let finalFilepath = '';
+      let lastError = '';
+
+      cp.stdout.on('data', (chunk: Buffer) => {
+        const lines = chunk.toString().split(/\r?\n/);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const downloadMatch =
+            line.match(/\[download\]\s+([\d\.]+)%\s+of\s+~?([\d\.]+\w+)\s+at\s+([\d\.]+\w+\/s)\s+ETA\s+([\d:]+)/i) ||
+            line.match(/\[download\]\s+([\d\.]+)%/i);
+
+          if (downloadMatch) {
+            const percent = parseFloat(downloadMatch[1]) || 0;
+            const speed = downloadMatch[3] || 'calculating...';
+            const eta = downloadMatch[4] || '--:--';
+
+            onProgress({
+              id,
+              status: percent >= 100 ? 'processing' : 'downloading',
+              percent,
+              speed,
+              eta,
+            });
+          }
+
+          const destMatch =
+            line.match(/\[download\] Destination: (.+)/) ||
+            line.match(/\[Merger\] Merging formats into "(.+)"/) ||
+            line.match(/\[ExtractAudio\] Destination: (.+)/) ||
+            line.match(/\[download\] (.+) has already been downloaded/);
+
+          if (destMatch && destMatch[1]) {
+            finalFilepath = destMatch[1].trim().replace(/^"/, '').replace(/"$/, '');
+          }
+        }
+      });
+
+      cp.stderr.on('data', (chunk: Buffer) => {
+        lastError += chunk.toString();
+      });
+
+      cp.on('close', (code: number) => {
+        resolve({
+          filename: finalFilepath ? path.basename(finalFilepath) : '',
+          filepath: finalFilepath,
+          size: 0,
+          code: code ?? 1,
+          lastError,
+        });
+      });
+
+      cp.on('error', (err: any) => {
+        resolve({
+          filename: '',
+          filepath: '',
+          size: 0,
+          code: 1,
+          lastError: err.message,
+        });
+      });
+    });
+  }
+
   public download(
     req: DownloadRequest,
     onProgress: (progress: DownloadProgress) => void
@@ -1116,57 +1249,6 @@ export class YtDlpService {
       const resolvedUrl = await this.resolveShortUrl(req.url);
       const outputTemplate = path.join(outputFolder, '%(title).100B [%(id)s].%(ext)s');
       const activeClients = settingsService.getExtractorClients();
-      const cookiesPath = settingsService.getCookiesFilePath();
-      const activeProxy = settingsService.getActiveProxy();
-
-      const args: string[] = [
-        '--newline',
-        '--no-playlist',
-        '--no-warnings',
-        '--socket-timeout', '30',
-        '--extractor-args', `youtube:player_client=${activeClients}`,
-        '--concurrent-fragments', '5',
-        '--buffer-size', '1024k',
-        '--http-chunk-size', '10M',
-        '--retries', '10',
-        '--fragment-retries', '10',
-        '-o', outputTemplate,
-      ];
-
-      if (cookiesPath) {
-        args.push('--cookies', cookiesPath);
-      }
-
-      if (activeProxy) {
-        args.push('--proxy', activeProxy);
-      }
-
-      const preset = req.preset || 'best-video-mp4';
-      if (preset === 'best-video-mp4') {
-        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
-      } else if (preset === '1080p-mp4') {
-        args.push('-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4');
-      } else if (preset === '720p-mp4') {
-        args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format', 'mp4');
-      } else if (preset === '480p-mp4') {
-        args.push('-f', 'bv*[height<=480]+ba/b[height<=480]/b', '--merge-output-format', 'mp4');
-      } else if (preset === '360p-mp4') {
-        args.push('-f', 'bv*[height<=360]+ba/b[height<=360]/b', '--merge-output-format', 'mp4');
-      } else if (preset === 'mp3-320' || preset === 'best-audio-mp3') {
-        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '320K');
-      } else if (preset === 'mp3-128') {
-        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '128K');
-      } else if (preset === 'm4a-best' || preset === 'audio-m4a') {
-        args.push('-x', '--audio-format', 'm4a');
-      } else if (preset === 'audio-wav') {
-        args.push('-x', '--audio-format', 'wav');
-      } else if (req.customFormatId) {
-        args.push('-f', req.customFormatId);
-      } else {
-        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
-      }
-
-      args.push(resolvedUrl);
 
       onProgress({
         id: req.id,
@@ -1176,144 +1258,151 @@ export class YtDlpService {
         eta: '--:--',
       });
 
-      childProcess = spawn(this.ytDlpPath, args);
+      let runRes = await this.runYtDlpDownload(
+        resolvedUrl,
+        outputTemplate,
+        activeClients,
+        req.preset || 'best-video-mp4',
+        req.customFormatId,
+        onProgress,
+        req.id,
+        () => canceled,
+        (cp) => { childProcess = cp; }
+      );
 
-      let finalFilepath = '';
-      let lastError = '';
+      // If YouTube download encounters bot detection, automatically retry with fallback clients!
+      if (runRes.code !== 0 && platform === 'YouTube' && !canceled) {
+        const lowerErr = runRes.lastError.toLowerCase();
+        const isBot = lowerErr.includes('sign in') || lowerErr.includes('bot') || lowerErr.includes('confirm you\'re not a bot');
 
-      childProcess.stdout.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split(/\r?\n/);
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          const downloadMatch = line.match(/\[download\]\s+([\d\.]+)%\s+of\s+~?([\d\.]+\w+)\s+at\s+([\d\.]+\w+\/s)\s+ETA\s+([\d:]+)/i) ||
-                               line.match(/\[download\]\s+([\d\.]+)%/i);
-
-          if (downloadMatch) {
-            const percent = parseFloat(downloadMatch[1]) || 0;
-            const speed = downloadMatch[3] || 'calculating...';
-            const eta = downloadMatch[4] || '--:--';
-
-            onProgress({
-              id: req.id,
-              status: percent >= 100 ? 'processing' : 'downloading',
-              percent,
-              speed,
-              eta,
-            });
-          }
-
-          const destMatch = line.match(/\[download\] Destination: (.+)/) ||
-                            line.match(/\[Merger\] Merging formats into "(.+)"/) ||
-                            line.match(/\[ExtractAudio\] Destination: (.+)/) ||
-                            line.match(/\[download\] (.+) has already been downloaded/);
-
-          if (destMatch && destMatch[1]) {
-            finalFilepath = destMatch[1].trim().replace(/^"/, '').replace(/"$/, '');
-          }
-        }
-      });
-
-      childProcess.stderr.on('data', (chunk: Buffer) => {
-        lastError += chunk.toString();
-      });
-
-      childProcess.on('close', async (code: number) => {
-        if (canceled) {
-          onProgress({
-            id: req.id,
-            status: 'canceled',
-            percent: 0,
-            speed: '',
-            eta: '',
-          });
-          return reject(new Error('Download was canceled'));
+        if (isBot) {
+          console.warn(`⚠️ [YouTube Download] Client '${activeClients}' failed. Retrying with 'android'...`);
+          runRes = await this.runYtDlpDownload(
+            resolvedUrl,
+            outputTemplate,
+            'android',
+            req.preset || 'best-video-mp4',
+            req.customFormatId,
+            onProgress,
+            req.id,
+            () => canceled,
+            (cp) => { childProcess = cp; }
+          );
         }
 
-        if (code !== 0) {
-          this.logYtDlpDiagnostics(lastError, req.url, platform, 'Download');
-
-          if (platform === 'TikTok') {
-            try {
-              const tiktokMeta = await this.fetchTikTokFallback(req.url);
-              const isAudio = req.preset.startsWith('mp3') || req.preset.startsWith('m4a');
-              const streamUrl = isAudio && tiktokMeta.directAudioUrl ? tiktokMeta.directAudioUrl : tiktokMeta.directDownloadUrl;
-
-              if (streamUrl) {
-                const fallbackDl = this.downloadDirectUrl(streamUrl, outputFolder, tiktokMeta.title, isAudio, onProgress, req.id);
-                const res = await fallbackDl.promise;
-                return resolve(res);
-              }
-            } catch {}
-          }
-
-          if (platform === 'Facebook') {
-            try {
-              const fbMeta = await this.fetchFacebookFallback(req.url);
-              if (fbMeta.directDownloadUrl) {
-                const isAudio = req.preset.startsWith('mp3') || req.preset.startsWith('m4a');
-                const fallbackDl = this.downloadDirectUrl(fbMeta.directDownloadUrl, outputFolder, fbMeta.title, isAudio, onProgress, req.id);
-                const res = await fallbackDl.promise;
-                return resolve(res);
-              }
-            } catch {}
-          }
-
-          const friendly = this.cleanErrorMessage(lastError || `Process exited with code ${code}`, platform);
-          onProgress({
-            id: req.id,
-            status: 'failed',
-            percent: 0,
-            speed: '',
-            eta: '',
-            error: friendly,
-          });
-          return reject(new Error(friendly));
+        if (runRes.code !== 0 && isBot && !canceled) {
+          console.warn(`⚠️ [YouTube Download] Fallback 'android' failed. Retrying with 'ios,mweb'...`);
+          runRes = await this.runYtDlpDownload(
+            resolvedUrl,
+            outputTemplate,
+            'ios,mweb',
+            req.preset || 'best-video-mp4',
+            req.customFormatId,
+            onProgress,
+            req.id,
+            () => canceled,
+            (cp) => { childProcess = cp; }
+          );
         }
 
-        let actualPath = finalFilepath;
-        if (!actualPath || !fs.existsSync(actualPath)) {
-          const files = fs.readdirSync(outputFolder).map(f => ({
-            name: f,
-            time: fs.statSync(path.join(outputFolder, f)).mtimeMs,
-          })).sort((a, b) => b.time - a.time);
-
-          if (files.length > 0) {
-            actualPath = path.join(outputFolder, files[0].name);
-          }
+        if (runRes.code !== 0 && isBot && !canceled) {
+          console.warn(`⚠️ [YouTube Download] Fallback 'ios,mweb' failed. Retrying with 'tv_embedded,web'...`);
+          runRes = await this.runYtDlpDownload(
+            resolvedUrl,
+            outputTemplate,
+            'tv_embedded,web',
+            req.preset || 'best-video-mp4',
+            req.customFormatId,
+            onProgress,
+            req.id,
+            () => canceled,
+            (cp) => { childProcess = cp; }
+          );
         }
+      }
 
-        const stats = actualPath && fs.existsSync(actualPath) ? fs.statSync(actualPath) : null;
-        const filename = actualPath ? path.basename(actualPath) : 'media.mp4';
-        const size = stats ? stats.size : 0;
-
+      if (canceled) {
         onProgress({
           id: req.id,
-          status: 'completed',
-          percent: 100,
-          speed: 'Done',
-          eta: '00:00',
-          filename,
-          filepath: actualPath,
+          status: 'canceled',
+          percent: 0,
+          speed: '',
+          eta: '',
         });
+        return reject(new Error('Download was canceled'));
+      }
 
-        resolve({
-          filename,
-          filepath: actualPath,
-          size,
-        });
-      });
+      if (runRes.code !== 0) {
+        this.logYtDlpDiagnostics(runRes.lastError, req.url, platform, 'Download');
 
-      childProcess.on('error', (err: any) => {
+        if (platform === 'TikTok') {
+          try {
+            const tiktokMeta = await this.fetchTikTokFallback(req.url);
+            const isAudio = req.preset.startsWith('mp3') || req.preset.startsWith('m4a');
+            const streamUrl = isAudio && tiktokMeta.directAudioUrl ? tiktokMeta.directAudioUrl : tiktokMeta.directDownloadUrl;
+
+            if (streamUrl) {
+              const fallbackDl = this.downloadDirectUrl(streamUrl, outputFolder, tiktokMeta.title, isAudio, onProgress, req.id);
+              const res = await fallbackDl.promise;
+              return resolve(res);
+            }
+          } catch {}
+        }
+
+        if (platform === 'Facebook') {
+          try {
+            const fbMeta = await this.fetchFacebookFallback(req.url);
+            if (fbMeta.directDownloadUrl) {
+              const isAudio = req.preset.startsWith('mp3') || req.preset.startsWith('m4a');
+              const fallbackDl = this.downloadDirectUrl(fbMeta.directDownloadUrl, outputFolder, fbMeta.title, isAudio, onProgress, req.id);
+              const res = await fallbackDl.promise;
+              return resolve(res);
+            }
+          } catch {}
+        }
+
+        const friendly = this.cleanErrorMessage(runRes.lastError || `Process exited with code ${runRes.code}`, platform);
         onProgress({
           id: req.id,
           status: 'failed',
           percent: 0,
           speed: '',
           eta: '',
-          error: err.message,
+          error: friendly,
         });
-        reject(err);
+        return reject(new Error(friendly));
+      }
+
+      let actualPath = runRes.filepath;
+      if (!actualPath || !fs.existsSync(actualPath)) {
+        const files = fs.readdirSync(outputFolder).map(f => ({
+          name: f,
+          time: fs.statSync(path.join(outputFolder, f)).mtimeMs,
+        })).sort((a, b) => b.time - a.time);
+
+        if (files.length > 0) {
+          actualPath = path.join(outputFolder, files[0].name);
+        }
+      }
+
+      const stats = actualPath && fs.existsSync(actualPath) ? fs.statSync(actualPath) : null;
+      const filename = actualPath ? path.basename(actualPath) : 'media.mp4';
+      const size = stats ? stats.size : 0;
+
+      onProgress({
+        id: req.id,
+        status: 'completed',
+        percent: 100,
+        speed: 'Done',
+        eta: '00:00',
+        filename,
+        filepath: actualPath,
+      });
+
+      resolve({
+        filename,
+        filepath: actualPath,
+        size,
       });
     });
 

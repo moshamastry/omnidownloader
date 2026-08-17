@@ -117,6 +117,14 @@ export interface AppSettings {
   autoDetectClipboard: boolean;
   theme: 'dark' | 'light' | 'system';
   proxyUrl?: string;
+  cookiesContent?: string;
+  extractorClients?: string;
+  cookiesStatus?: {
+    hasCookies: boolean;
+    source: string;
+    message: string;
+    sizeBytes?: number;
+  };
 }
 
 export interface User {

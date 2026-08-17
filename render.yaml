@@ -10,4 +10,12 @@ services:
         value: 4000
       - key: NODE_ENV
         value: production
+      - key: YTDLP_AUTO_UPDATE
+        value: "true"
+      - key: YTDLP_EXTRACTOR_CLIENTS
+        value: "android,ios,mweb,web"
+      # - key: YOUTUBE_COOKIES
+      #   sync: false # Set in Render Dashboard with your Netscape cookies.txt content
+      # - key: PROXY_URL
+      #   sync: false # e.g. http://username:password@proxyhost:port
     healthCheckPath: /api/health

@@ -193,19 +193,20 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
   };
 
   const formatOptions = [
-    { id: 'best-video-mp4', label: 'Best Quality (Auto 1080p/4K)', type: 'video', quality: 'Ultra HD', isPro: false },
-    { id: '1080p-mp4', label: 'Full HD 1080p MP4 (60fps)', type: 'video', quality: '1080p', isPro: false },
-    { id: '720p-mp4', label: 'HD 720p MP4 (Fast)', type: 'video', quality: '720p', isPro: false },
-    { id: '480p-mp4', label: 'SD 480p (Mobile Data Saver)', type: 'video', quality: '480p', isPro: false },
-    { id: 'best-audio-mp3', label: 'Lossless MP3 (320 kbps Studio)', type: 'audio', quality: '320k', isPro: false },
-    { id: 'audio-m4a', label: 'High Quality AAC / M4A (Apple)', type: 'audio', quality: 'AAC', isPro: false },
-    { id: 'audio-wav', label: 'Uncompressed WAV (Lossless Master)', type: 'audio', quality: 'WAV', isPro: true },
+    { id: 'best-video-mp4', label: 'Best Quality MP4 (Video + Sound)', type: 'video', quality: 'Ultra HD', isPro: false },
+    { id: '1080p-mp4', label: 'Full HD 1080p (Video + Sound)', type: 'video', quality: '1080p', isPro: false },
+    { id: '720p-mp4', label: 'HD 720p (Video + Sound Fast)', type: 'video', quality: '720p', isPro: false },
+    { id: '480p-mp4', label: 'SD 480p (Data Saver + Sound)', type: 'video', quality: '480p', isPro: false },
+    { id: 'best-audio-mp3', label: 'Lossless MP3 Audio (320 kbps)', type: 'audio', quality: '320k', isPro: false },
+    { id: 'audio-m4a', label: 'High Quality AAC / M4A Audio', type: 'audio', quality: 'AAC', isPro: false },
+    { id: 'audio-wav', label: 'Uncompressed WAV (Master Studio)', type: 'audio', quality: 'WAV', isPro: true },
   ];
 
   const handleSelectPlatform = (platformName: string) => {
     const sampleUrls: Record<string, string> = {
       'YouTube': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       'Instagram': 'https://www.instagram.com/reel/',
+      'Threads': 'https://www.threads.net/',
       'TikTok': 'https://www.tiktok.com/@tiktok/video/',
       'Twitter / X': 'https://x.com/',
       'Facebook': 'https://www.facebook.com/watch/',

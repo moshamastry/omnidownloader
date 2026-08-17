@@ -13,7 +13,9 @@ import {
   Zap, 
   FolderOpen,
   Globe,
-  ShieldAlert
+  ShieldAlert,
+  KeyRound,
+  FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AppSettings } from '../../types';
@@ -170,6 +172,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             />
             <p className="text-[10px] text-slate-500">
               Useful for bypassing ISP blocks (e.g. TikTok) with local VPN proxy.
+            </p>
+          </div>
+
+          {/* YouTube & Instagram Cookies Manager */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-amber-500" />
+                <span>Cookies / Session Manager</span>
+              </label>
+              {settings.cookiesStatus?.hasCookies ? (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  ✅ Active ({settings.cookiesStatus.source})
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                  Required for Render / Cloud
+                </span>
+              )}
+            </div>
+            <textarea
+              rows={3}
+              value={settings.cookiesContent || ''}
+              onChange={(e) => setSettings({ ...settings, cookiesContent: e.target.value })}
+              placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / TRUE 2147483647 VISITOR_INFO1_LIVE xxx&#10;.instagram.com TRUE / TRUE 2147483647 sessionid xxx"
+              className="w-full rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/20 px-3 py-2 text-[11px] font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 resize-y"
+            />
+            <p className="text-[10px] text-slate-500 leading-tight">
+              Paste Netscape formatted cookies from browser extension (e.g. <b>"Get cookies.txt LOCALLY"</b>) or set <code>YOUTUBE_COOKIES</code> in Render Environment Variables.
             </p>
           </div>
 

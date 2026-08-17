@@ -238,6 +238,16 @@ apiRouter.get('/health', async (_req: Request, res: Response) => {
   }
 });
 
+// 1b. Trigger yt-dlp update on demand
+apiRouter.post('/ytdlp/update', async (_req: Request, res: Response) => {
+  try {
+    const result = await ytdlpService.autoUpdateYtDlp();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update yt-dlp' });
+  }
+});
+
 // 2. Extract Single Video Metadata
 apiRouter.post('/info', async (req: Request, res: Response) => {
   const { url } = req.body;
@@ -481,7 +491,9 @@ apiRouter.delete('/history', (_req: Request, res: Response) => {
 
 // 7. Settings
 apiRouter.get('/settings', (_req: Request, res: Response) => {
-  res.json(settingsService.getSettings());
+  const currentSettings = settingsService.getSettings();
+  const cookiesStatus = settingsService.getCookieStatus();
+  res.json({ ...currentSettings, cookiesStatus });
 });
 
 apiRouter.post('/settings', (req: Request, res: Response) => {
@@ -492,7 +504,8 @@ apiRouter.post('/settings', (req: Request, res: Response) => {
   if (req.body.downloadDirectory) {
     ytdlpService.setDownloadDir(req.body.downloadDirectory);
   }
-  res.json(updated);
+  const cookiesStatus = settingsService.getCookieStatus();
+  res.json({ ...updated, cookiesStatus });
 });
 
 // 8. Stream / Download File to Device (Mobile & Web friendly)

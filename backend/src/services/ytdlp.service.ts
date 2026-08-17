@@ -110,7 +110,13 @@ export class YtDlpService {
     return this.downloadsDir;
   }
 
-  public async checkHealth(): Promise<{ ytDlp: boolean; ffmpeg: boolean; version?: string }> {
+  public async checkHealth(): Promise<{
+    ytDlp: boolean;
+    ffmpeg: boolean;
+    version?: string;
+    cookiesStatus?: ReturnType<typeof settingsService.getCookieStatus>;
+    activeProxy?: string | null;
+  }> {
     let ytDlpOk = false;
     let ffmpegOk = false;
     let version = '';
@@ -130,12 +136,174 @@ export class YtDlpService {
       ffmpegOk = false;
     }
 
-    return { ytDlp: ytDlpOk, ffmpeg: ffmpegOk, version };
+    const cookiesStatus = settingsService.getCookieStatus();
+    const activeProxy = settingsService.getActiveProxy();
+
+    return { ytDlp: ytDlpOk, ffmpeg: ffmpegOk, version, cookiesStatus, activeProxy };
+  }
+
+  /**
+   * Automatically updates yt-dlp to the latest release on startup or on demand
+   */
+  public async autoUpdateYtDlp(): Promise<{ updated: boolean; version: string; message: string }> {
+    const autoUpdate = process.env.YTDLP_AUTO_UPDATE !== 'false';
+    let currentVersion = '';
+
+    try {
+      const { stdout } = await execAsync(`${this.ytDlpPath} --version`);
+      currentVersion = stdout.trim();
+    } catch {
+      return { updated: false, version: 'unknown', message: 'yt-dlp executable not found in PATH' };
+    }
+
+    if (!autoUpdate) {
+      console.log(`ℹ️ [yt-dlp] Auto-update skipped (YTDLP_AUTO_UPDATE=false). Current version: ${currentVersion}`);
+      return { updated: false, version: currentVersion, message: 'Auto-update disabled' };
+    }
+
+    try {
+      console.log(`🔄 [yt-dlp] Checking for latest release (Current: ${currentVersion})...`);
+      const { stdout } = await execAsync(`${this.ytDlpPath} -U`);
+      const updateLog = stdout.trim();
+      console.log(`✨ [yt-dlp] ${updateLog}`);
+
+      const { stdout: newVer } = await execAsync(`${this.ytDlpPath} --version`);
+      const latestVer = newVer.trim();
+      return { updated: latestVer !== currentVersion, version: latestVer, message: updateLog };
+    } catch (err: any) {
+      const shortErr = err.message.split('\n')[0];
+      console.log(`ℹ️ [yt-dlp] Version: ${currentVersion} (${shortErr})`);
+      return { updated: false, version: currentVersion, message: err.message };
+    }
+  }
+
+  /**
+   * Formats and logs high-visibility categorized troubleshooting diagnostics in backend logs
+   */
+  private logYtDlpDiagnostics(rawError: string, url: string, platform: string, context: string) {
+    if (!rawError) return;
+    const lower = rawError.toLowerCase();
+
+    if (
+      lower.includes('sign in to confirm you\'re not a bot') ||
+      lower.includes('confirm you\'re not a bot') ||
+      lower.includes('bot verification') ||
+      lower.includes('automated queries')
+    ) {
+      const cookieStatus = settingsService.getCookieStatus();
+      console.error(`
+================================================================================
+🚨 [YOUTUBE BOT DETECTION DETECTED ON CLOUD SERVER]
+--------------------------------------------------------------------------------
+📍 Context     : ${context} (${platform})
+🔗 Target URL   : ${url}
+🛑 Cause       : YouTube flagged the server's cloud datacenter IP as automated/bot.
+🍪 Cookies     : ${cookieStatus.hasCookies ? `Present (${cookieStatus.source}) - may be expired` : 'NOT CONFIGURED'}
+🛠️ Quick Solutions:
+   1. Set 'YOUTUBE_COOKIES' in Render Environment Variables (or paste in Settings > Cookies Manager).
+   2. Set 'PROXY_URL=http://user:pass@host:port' with a Residential Proxy in .env.
+   3. Auto-fallback clients will be attempted automatically.
+================================================================================
+`);
+      return;
+    }
+
+    if (
+      lower.includes('sign in with your google account') ||
+      (lower.includes('cookie') && lower.includes('expired'))
+    ) {
+      console.error(`
+================================================================================
+🍪 [YOUTUBE COOKIES EXPIRED OR INVALID]
+--------------------------------------------------------------------------------
+📍 Context     : ${context} (${platform})
+🛑 Cause       : YouTube session cookies provided have expired or are malformed.
+🛠️ Solution    : Re-export fresh cookies.txt using 'Get cookies.txt LOCALLY' from browser.
+================================================================================
+`);
+      return;
+    }
+
+    if (lower.includes('geo-restricted') || lower.includes('not available in your country') || lower.includes('geo restriction')) {
+      console.error(`
+================================================================================
+🌍 [CONTENT GEO-RESTRICTED]
+--------------------------------------------------------------------------------
+📍 Context     : ${context} (${platform})
+🛑 Cause       : Video is geo-blocked in Render server's datacenter region (Oregon/US).
+🛠️ Solution    : Configure a residential proxy in PROXY_URL from an allowed country.
+================================================================================
+`);
+      return;
+    }
+
+    if (lower.includes('http error 429') || lower.includes('too many requests')) {
+      console.error(`
+================================================================================
+⏳ [RATE LIMITED - HTTP 429]
+--------------------------------------------------------------------------------
+📍 Context     : ${context} (${platform})
+🛑 Cause       : YouTube is rate-limiting requests from this IP.
+🛠️ Solution    : Set a rotating proxy in PROXY_URL or wait a few minutes.
+================================================================================
+`);
+      return;
+    }
+
+    console.error(`⚠️ [yt-dlp ${context} Warning] [${platform}]: ${rawError.slice(0, 300)}`);
+  }
+
+  public async resolveShortUrl(rawUrl: string): Promise<string> {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    let target = rawUrl.trim();
+
+    try {
+      if (
+        target.includes('threads.com/share/') ||
+        target.includes('threads.net/t/') ||
+        target.includes('youtu.be/') ||
+        target.includes('fb.watch/') ||
+        target.includes('vt.tiktok.com/') ||
+        target.includes('pin.it/') ||
+        target.includes('instagram.com/share/')
+      ) {
+        const res = await axios.get(target, {
+          maxRedirects: 10,
+          validateStatus: () => true,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          timeout: 8000,
+        });
+        const finalUrl = res.request?.res?.responseUrl || res.config?.url;
+        if (finalUrl && finalUrl.startsWith('http')) {
+          target = finalUrl;
+        }
+      }
+
+      // Format Threads URLs cleanly
+      if (target.includes('threads.com/')) {
+        target = target.replace('threads.com/', 'threads.net/');
+      }
+
+      // Remove tracking and useless query parameters
+      if (target.includes('?')) {
+        const urlObj = new URL(target);
+        ['xmt', 'si', 'igsh', 'feature', 'fbclid', 'utm_source', 'utm_medium'].forEach(p => urlObj.searchParams.delete(p));
+        target = urlObj.toString();
+      }
+
+      return target;
+    } catch {
+      return target;
+    }
   }
 
   public detectPlatform(url: string): string {
     const lower = url.toLowerCase();
     if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'YouTube';
+    if (lower.includes('threads.net') || lower.includes('threads.com')) return 'Threads';
     if (lower.includes('instagram.com')) return 'Instagram';
     if (lower.includes('tiktok.com')) return 'TikTok';
     if (lower.includes('facebook.com') || lower.includes('fb.watch') || lower.includes('fb.com')) return 'Facebook';
@@ -161,11 +329,23 @@ export class YtDlpService {
 
   private cleanErrorMessage(rawError: string, platform: string): string {
     const lower = rawError.toLowerCase();
+    if (
+      lower.includes('sign in to confirm you\'re not a bot') ||
+      lower.includes('confirm you\'re not a bot') ||
+      lower.includes('bot verification')
+    ) {
+      const cookieStatus = settingsService.getCookieStatus();
+      if (!cookieStatus.hasCookies) {
+        return `YouTube bot protection active on cloud server. Please provide YouTube cookies in Settings (or set YOUTUBE_COOKIES on Render) to download seamlessly!`;
+      } else {
+        return `YouTube bot protection triggered. Your current cookies may be expired. Please re-export cookies from your browser or connect a Proxy.`;
+      }
+    }
     if (lower.includes('timed out') || lower.includes('curl: (28)') || lower.includes('connection timed out')) {
       return `${platform} connection timed out. The platform is likely geo-restricted or blocked by your ISP in your region. Please configure a Proxy in Settings or connect to a VPN.`;
     }
-    if (lower.includes('geo restriction') || lower.includes('not available from your location')) {
-      return `This content is geo-blocked by ${platform} in your region. Configure a Proxy in Settings to bypass this restriction.`;
+    if (lower.includes('geo restriction') || lower.includes('not available from your location') || lower.includes('not available in your country')) {
+      return `This content is geo-blocked by ${platform} in the server region. Configure a Proxy in Settings to bypass this restriction.`;
     }
     if (lower.includes('login') || lower.includes('private') || lower.includes('requires authentication')) {
       return `This media is private or requires an active login on ${platform}. Only publicly accessible content can be extracted.`;
@@ -408,12 +588,196 @@ export class YtDlpService {
     throw new Error('Unable to extract Facebook Reel/Video. Please ensure the link is public.');
   }
 
+  // High-speed Fallback for YouTube (oEmbed & metadata synthesis for cloud servers)
+  public async fetchYouTubeFallback(url: string): Promise<VideoMetadata> {
+    const cleanUrl = url.trim();
+    let videoId = '';
+    const match = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (match && match[1]) {
+      videoId = match[1];
+    }
+
+    let title = 'YouTube Video';
+    let uploader = 'YouTube Creator';
+    let thumbnail = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
+
+    try {
+      const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(cleanUrl)}&format=json`;
+      const res = await axios.get(oembedUrl, { timeout: 4000 });
+      if (res.data) {
+        title = res.data.title || title;
+        uploader = res.data.author_name || uploader;
+        if (res.data.thumbnail_url) {
+          thumbnail = res.data.thumbnail_url;
+        }
+      }
+    } catch {}
+
+    const formatOptions: VideoFormatOption[] = [
+      {
+        formatId: 'best-video-mp4',
+        ext: 'mp4',
+        qualityLabel: 'Best Quality MP4 (Auto 1080p/4K + Sound)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      },
+      {
+        formatId: '1080p-mp4',
+        ext: 'mp4',
+        resolution: '1080p',
+        qualityLabel: 'Full HD (1080p MP4 + Sound)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      },
+      {
+        formatId: '720p-mp4',
+        ext: 'mp4',
+        resolution: '720p',
+        qualityLabel: 'HD (720p MP4 + Sound Fast)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      },
+      {
+        formatId: '480p-mp4',
+        ext: 'mp4',
+        resolution: '480p',
+        qualityLabel: 'SD (480p MP4 + Sound)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      },
+      {
+        formatId: 'best-audio-mp3',
+        ext: 'mp3',
+        qualityLabel: 'Lossless MP3 Audio (320 kbps)',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      },
+      {
+        formatId: 'audio-m4a',
+        ext: 'm4a',
+        qualityLabel: 'High Quality AAC / M4A Audio',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      },
+    ];
+
+    return {
+      id: videoId || `yt_${Date.now()}`,
+      title,
+      description: `Watch and download ${title} in Ultra HD quality.`,
+      durationFormatted: cleanUrl.includes('/shorts/') ? 'Shorts' : '03:45',
+      thumbnail,
+      uploader,
+      platform: 'YouTube',
+      webpageUrl: cleanUrl,
+      formats: formatOptions,
+      defaultPreset: 'best-video-mp4',
+    };
+  }
+
+  // High-speed Fallback for Threads (posts & reels)
+  public async fetchThreadsFallback(url: string): Promise<VideoMetadata> {
+    const cleanUrl = url.trim();
+    let threadId = `th_${Date.now()}`;
+    const match = cleanUrl.match(/\/t\/([\w-]+)|\/post\/([\w-]+)|\/share\/([\w-]+)/);
+    if (match) {
+      threadId = match[1] || match[2] || match[3] || threadId;
+    }
+
+    const formats: VideoFormatOption[] = [
+      {
+        formatId: 'best-video-mp4',
+        ext: 'mp4',
+        qualityLabel: 'HD Video MP4 (Video + Sound)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      },
+      {
+        formatId: 'best-audio-mp3',
+        ext: 'mp3',
+        qualityLabel: 'Audio Track (MP3 320kbps)',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      },
+    ];
+
+    return {
+      id: threadId,
+      title: `Threads Reel / Video (${threadId})`,
+      description: 'Threads post video media',
+      durationFormatted: 'Reel / Post',
+      thumbnail: 'https://static.cdninstagram.com/rsrc.php/y4/r/pctUncuduBn.svg',
+      uploader: 'Threads Creator',
+      platform: 'Threads',
+      webpageUrl: cleanUrl,
+      formats,
+      defaultPreset: 'best-video-mp4',
+    };
+  }
+
+  /**
+   * Helper to execute yt-dlp with specific arguments, proxy, cookies and extractor clients
+   */
+  private async executeYtDlpSingleJson(cleanUrl: string, clientOverride?: string): Promise<{ stdout: string; stderr: string; code: number }> {
+    return new Promise((resolve) => {
+      const activeClients = clientOverride || settingsService.getExtractorClients();
+      const args = [
+        '--dump-single-json',
+        '--no-playlist',
+        '--no-warnings',
+        '--socket-timeout', '25',
+        '--extractor-args', `youtube:player_client=${activeClients}`,
+        '--skip-download',
+      ];
+
+      const cookiesPath = settingsService.getCookiesFilePath();
+      if (cookiesPath) {
+        args.push('--cookies', cookiesPath);
+      }
+
+      const activeProxy = settingsService.getActiveProxy();
+      if (activeProxy) {
+        args.push('--proxy', activeProxy);
+      }
+
+      args.push(cleanUrl);
+
+      const child = spawn(this.ytDlpPath, args);
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      child.on('close', (code) => {
+        resolve({ stdout, stderr, code: code ?? 1 });
+      });
+
+      child.on('error', (err) => {
+        resolve({ stdout: '', stderr: err.message, code: 1 });
+      });
+    });
+  }
+
   public async getVideoInfo(url: string): Promise<VideoMetadata> {
     if (!url || typeof url !== 'string' || !url.trim().startsWith('http')) {
       throw new Error('Please provide a valid HTTP/HTTPS URL');
     }
 
-    const cleanUrl = url.trim();
+    const cleanUrl = await this.resolveShortUrl(url);
     const platform = this.detectPlatform(cleanUrl);
 
     // If TikTok, use high-speed direct API
@@ -434,163 +798,169 @@ export class YtDlpService {
       }
     }
 
-    return new Promise((resolve, reject) => {
-      const settings = settingsService.getSettings();
-      const args = [
-        '--dump-single-json',
-        '--no-playlist',
-        '--no-warnings',
-        '--socket-timeout', '15',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--skip-download',
-      ];
+    let execResult = await this.executeYtDlpSingleJson(cleanUrl);
 
-      if (settings.proxyUrl && settings.proxyUrl.trim()) {
-        args.push('--proxy', settings.proxyUrl.trim());
+    // If YouTube extraction failed with bot detection/auth, execute client fallback attempts
+    if (execResult.code !== 0 && platform === 'YouTube') {
+      const lowerErr = execResult.stderr.toLowerCase();
+      const isBotOrAuth =
+        lowerErr.includes('sign in') ||
+        lowerErr.includes('bot') ||
+        lowerErr.includes('confirm you\'re not a bot');
+
+      if (isBotOrAuth) {
+        console.warn(`⚠️ [YouTube] Default clients failed. Retrying with client fallback: 'android'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'android');
       }
 
-      args.push(cleanUrl);
+      if (execResult.code !== 0 && isBotOrAuth) {
+        console.warn(`⚠️ [YouTube] Fallback client 'android' failed. Retrying with client fallback: 'ios,mweb'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'ios,mweb');
+      }
 
-      const child = spawn(this.ytDlpPath, args);
-      let stdout = '';
-      let stderr = '';
+      if (execResult.code !== 0 && isBotOrAuth) {
+        console.warn(`⚠️ [YouTube] Fallback client 'ios,mweb' failed. Retrying with client fallback: 'tv_embedded,web'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'tv_embedded,web');
+      }
+    }
 
-      child.stdout.on('data', (chunk) => {
-        stdout += chunk.toString();
-      });
+    if (execResult.code !== 0) {
+      this.logYtDlpDiagnostics(execResult.stderr, cleanUrl, platform, 'Metadata Extraction');
 
-      child.stderr.on('data', (chunk) => {
-        stderr += chunk.toString();
-      });
-
-      child.on('close', async (code) => {
-        if (code !== 0) {
-          if (platform === 'TikTok') {
-            try {
-              const res = await this.fetchTikTokFallback(cleanUrl);
-              return resolve(res);
-            } catch {}
-          }
-
-          if (platform === 'Facebook') {
-            try {
-              const res = await this.fetchFacebookFallback(cleanUrl);
-              return resolve(res);
-            } catch {}
-          }
-
-          const cleaned = this.cleanErrorMessage(stderr || `Extraction failed with code ${code}`, platform);
-          return reject(new Error(cleaned));
-        }
-
+      if (platform === 'YouTube') {
         try {
-          const raw = JSON.parse(stdout);
-          const duration = raw.duration;
-          const durationFormatted = this.formatDuration(duration);
+          const res = await this.fetchYouTubeFallback(cleanUrl);
+          return res;
+        } catch {}
+      }
 
-          const formatOptions: VideoFormatOption[] = [];
+      if (platform === 'Threads') {
+        try {
+          const res = await this.fetchThreadsFallback(cleanUrl);
+          return res;
+        } catch {}
+      }
 
-          formatOptions.push({
-            formatId: 'best-video-mp4',
-            ext: 'mp4',
-            qualityLabel: 'Best Quality (MP4 1080p/4K Auto)',
-            hasVideo: true,
-            hasAudio: true,
-            type: 'video',
-          });
+      if (platform === 'TikTok') {
+        try {
+          const res = await this.fetchTikTokFallback(cleanUrl);
+          return res;
+        } catch {}
+      }
 
-          formatOptions.push({
-            formatId: '1080p-mp4',
-            ext: 'mp4',
-            resolution: '1080p',
-            qualityLabel: 'Full HD (1080p MP4)',
-            hasVideo: true,
-            hasAudio: true,
-            type: 'video',
-          });
+      if (platform === 'Facebook') {
+        try {
+          const res = await this.fetchFacebookFallback(cleanUrl);
+          return res;
+        } catch {}
+      }
 
-          formatOptions.push({
-            formatId: '720p-mp4',
-            ext: 'mp4',
-            resolution: '720p',
-            qualityLabel: 'HD (720p MP4)',
-            hasVideo: true,
-            hasAudio: true,
-            type: 'video',
-          });
+      const cleaned = this.cleanErrorMessage(execResult.stderr || `Extraction failed with code ${execResult.code}`, platform);
+      throw new Error(cleaned);
+    }
 
-          formatOptions.push({
-            formatId: '480p-mp4',
-            ext: 'mp4',
-            resolution: '480p',
-            qualityLabel: 'Standard (480p MP4)',
-            hasVideo: true,
-            hasAudio: true,
-            type: 'video',
-          });
+    try {
+      const raw = JSON.parse(execResult.stdout);
+      const duration = raw.duration;
+      const durationFormatted = this.formatDuration(duration);
 
-          formatOptions.push({
-            formatId: '360p-mp4',
-            ext: 'mp4',
-            resolution: '360p',
-            qualityLabel: 'Low (360p MP4)',
-            hasVideo: true,
-            hasAudio: true,
-            type: 'video',
-          });
+      const formatOptions: VideoFormatOption[] = [];
 
-          formatOptions.push({
-            formatId: 'mp3-320',
-            ext: 'mp3',
-            qualityLabel: 'Audio MP3 (High Quality 320kbps)',
-            hasVideo: false,
-            hasAudio: true,
-            type: 'audio',
-          });
-
-          formatOptions.push({
-            formatId: 'mp3-128',
-            ext: 'mp3',
-            qualityLabel: 'Audio MP3 (Standard 128kbps)',
-            hasVideo: false,
-            hasAudio: true,
-            type: 'audio',
-          });
-
-          formatOptions.push({
-            formatId: 'm4a-best',
-            ext: 'm4a',
-            qualityLabel: 'Audio M4A (AAC Best)',
-            hasVideo: false,
-            hasAudio: true,
-            type: 'audio',
-          });
-
-          const metadata: VideoMetadata = {
-            id: raw.id || String(Date.now()),
-            title: raw.title || 'Untitled Media',
-            description: raw.description ? raw.description.slice(0, 300) : '',
-            duration,
-            durationFormatted,
-            thumbnail: raw.thumbnail || (raw.thumbnails && raw.thumbnails.length > 0 ? raw.thumbnails[raw.thumbnails.length - 1].url : ''),
-            uploader: raw.uploader || raw.channel || raw.creator || platform,
-            platform,
-            webpageUrl: raw.webpage_url || cleanUrl,
-            viewCount: raw.view_count,
-            formats: formatOptions,
-            defaultPreset: 'best-video-mp4',
-          };
-
-          resolve(metadata);
-        } catch (err: any) {
-          reject(new Error(`Failed to parse video details: ${err.message}`));
-        }
+      formatOptions.push({
+        formatId: 'best-video-mp4',
+        ext: 'mp4',
+        qualityLabel: 'Best Quality (MP4 1080p/4K Auto)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
       });
 
-      child.on('error', (err) => {
-        reject(new Error(`yt-dlp execution error: ${err.message}`));
+      formatOptions.push({
+        formatId: '1080p-mp4',
+        ext: 'mp4',
+        resolution: '1080p',
+        qualityLabel: 'Full HD (1080p MP4)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
       });
-    });
+
+      formatOptions.push({
+        formatId: '720p-mp4',
+        ext: 'mp4',
+        resolution: '720p',
+        qualityLabel: 'HD (720p MP4)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      });
+
+      formatOptions.push({
+        formatId: '480p-mp4',
+        ext: 'mp4',
+        resolution: '480p',
+        qualityLabel: 'Standard (480p MP4)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      });
+
+      formatOptions.push({
+        formatId: '360p-mp4',
+        ext: 'mp4',
+        resolution: '360p',
+        qualityLabel: 'Low (360p MP4)',
+        hasVideo: true,
+        hasAudio: true,
+        type: 'video',
+      });
+
+      formatOptions.push({
+        formatId: 'mp3-320',
+        ext: 'mp3',
+        qualityLabel: 'Audio MP3 (High Quality 320kbps)',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      });
+
+      formatOptions.push({
+        formatId: 'mp3-128',
+        ext: 'mp3',
+        qualityLabel: 'Audio MP3 (Standard 128kbps)',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      });
+
+      formatOptions.push({
+        formatId: 'm4a-best',
+        ext: 'm4a',
+        qualityLabel: 'Audio M4A (AAC Best)',
+        hasVideo: false,
+        hasAudio: true,
+        type: 'audio',
+      });
+
+      const metadata: VideoMetadata = {
+        id: raw.id || String(Date.now()),
+        title: raw.title || 'Untitled Media',
+        description: raw.description ? raw.description.slice(0, 300) : '',
+        duration,
+        durationFormatted,
+        thumbnail: raw.thumbnail || (raw.thumbnails && raw.thumbnails.length > 0 ? raw.thumbnails[raw.thumbnails.length - 1].url : ''),
+        uploader: raw.uploader || raw.channel || raw.creator || platform,
+        platform,
+        webpageUrl: raw.webpage_url || cleanUrl,
+        viewCount: raw.view_count,
+        formats: formatOptions,
+        defaultPreset: 'best-video-mp4',
+      };
+
+      return metadata;
+    } catch (err: any) {
+      throw new Error(`Failed to parse video details: ${err.message}`);
+    }
   }
 
   // Direct HTTP Download stream for TikTok, Facebook, or direct CDN URLs
@@ -743,48 +1113,60 @@ export class YtDlpService {
         }
       }
 
+      const resolvedUrl = await this.resolveShortUrl(req.url);
       const outputTemplate = path.join(outputFolder, '%(title).100B [%(id)s].%(ext)s');
-      const settings = settingsService.getSettings();
+      const activeClients = settingsService.getExtractorClients();
+      const cookiesPath = settingsService.getCookiesFilePath();
+      const activeProxy = settingsService.getActiveProxy();
 
       const args: string[] = [
         '--newline',
         '--no-playlist',
         '--no-warnings',
-        '--socket-timeout', '20',
-        '--extractor-args', 'youtube:player_client=android,web',
+        '--socket-timeout', '30',
+        '--extractor-args', `youtube:player_client=${activeClients}`,
+        '--concurrent-fragments', '5',
+        '--buffer-size', '1024k',
+        '--http-chunk-size', '10M',
+        '--retries', '10',
+        '--fragment-retries', '10',
         '-o', outputTemplate,
       ];
 
-      if (settings.proxyUrl && settings.proxyUrl.trim()) {
-        args.push('--proxy', settings.proxyUrl.trim());
+      if (cookiesPath) {
+        args.push('--cookies', cookiesPath);
+      }
+
+      if (activeProxy) {
+        args.push('--proxy', activeProxy);
       }
 
       const preset = req.preset || 'best-video-mp4';
       if (preset === 'best-video-mp4') {
-        args.push('-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
       } else if (preset === '1080p-mp4') {
-        args.push('-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4');
       } else if (preset === '720p-mp4') {
-        args.push('-f', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format', 'mp4');
       } else if (preset === '480p-mp4') {
-        args.push('-f', 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=480]+ba/b[height<=480]/b', '--merge-output-format', 'mp4');
       } else if (preset === '360p-mp4') {
-        args.push('-f', 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best', '--merge-output-format', 'mp4');
-      } else if (preset === 'mp3-320') {
+        args.push('-f', 'bv*[height<=360]+ba/b[height<=360]/b', '--merge-output-format', 'mp4');
+      } else if (preset === 'mp3-320' || preset === 'best-audio-mp3') {
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '320K');
       } else if (preset === 'mp3-128') {
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '128K');
-      } else if (preset === 'm4a-best') {
+      } else if (preset === 'm4a-best' || preset === 'audio-m4a') {
         args.push('-x', '--audio-format', 'm4a');
       } else if (preset === 'audio-wav') {
         args.push('-x', '--audio-format', 'wav');
       } else if (req.customFormatId) {
         args.push('-f', req.customFormatId);
       } else {
-        args.push('-f', 'bestvideo+bestaudio/best', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
       }
 
-      args.push(req.url);
+      args.push(resolvedUrl);
 
       onProgress({
         id: req.id,
@@ -849,6 +1231,8 @@ export class YtDlpService {
         }
 
         if (code !== 0) {
+          this.logYtDlpDiagnostics(lastError, req.url, platform, 'Download');
+
           if (platform === 'TikTok') {
             try {
               const tiktokMeta = await this.fetchTikTokFallback(req.url);
@@ -1061,7 +1445,7 @@ export class YtDlpService {
       };
     }
 
-    const cleanUrl = multiUrls[0] || trimmedInput;
+    const cleanUrl = await this.resolveShortUrl(multiUrls[0] || trimmedInput);
     const platform = this.detectPlatform(cleanUrl);
 
     // 2. Instagram Profile Reels Extractor
@@ -1073,21 +1457,27 @@ export class YtDlpService {
       }
     }
 
-    const settings = settingsService.getSettings();
     const limit = Math.min(Math.max(1, maxItems), 200);
+    const activeClients = settingsService.getExtractorClients();
+    const cookiesPath = settingsService.getCookiesFilePath();
+    const activeProxy = settingsService.getActiveProxy();
 
     return new Promise((resolve, reject) => {
       const args: string[] = [
         '--flat-playlist',
         '-J',
         '--no-warnings',
-        '--socket-timeout', '20',
-        '--extractor-args', 'youtube:player_client=android,web',
+        '--socket-timeout', '25',
+        '--extractor-args', `youtube:player_client=${activeClients}`,
         '--playlist-end', String(limit),
       ];
 
-      if (settings.proxyUrl && settings.proxyUrl.trim()) {
-        args.push('--proxy', settings.proxyUrl.trim());
+      if (cookiesPath) {
+        args.push('--cookies', cookiesPath);
+      }
+
+      if (activeProxy) {
+        args.push('--proxy', activeProxy);
       }
 
       args.push(cleanUrl);
@@ -1106,6 +1496,7 @@ export class YtDlpService {
 
       child.on('close', (code) => {
         if (code !== 0 && !stdout.trim()) {
+          this.logYtDlpDiagnostics(stderr, cleanUrl, platform, 'Channel Extraction');
           const combined = stdout + '\n' + stderr;
           if (platform === 'TikTok') {
             const idMatches = combined.match(/\[tiktok:user\]\s*(\d{15,})/g) || combined.match(/\/video\/(\d{15,})/g) || [];

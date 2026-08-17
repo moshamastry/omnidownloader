@@ -7,7 +7,8 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import { apiRouter } from './routes/api.routes';
 import { queueService } from './services/queue.service';
-import { DownloadProgress } from './services/ytdlp.service';
+import { ytdlpService, DownloadProgress } from './services/ytdlp.service';
+import { settingsService } from './services/settings.service';
 
 dotenv.config();
 
@@ -203,11 +204,38 @@ server.on('error', (err: any) => {
 });
 
 // Start Server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`🚀 Multi Downloader Backend Server running on http://localhost:${PORT}`);
   console.log(`📡 WebSocket stream active on ws://localhost:${PORT}/ws`);
   if (frontendDistPath) {
     console.log(`🌐 Web UI is ready at http://localhost:${PORT}`);
+  }
+
+  // Startup Diagnostics & Auto-update
+  try {
+    const health = await ytdlpService.checkHealth();
+    console.log(`🎬 Engine Status: yt-dlp ${health.ytDlp ? '✅ Available' : '❌ Missing'} (${health.version || 'unknown'}), FFmpeg ${health.ffmpeg ? '✅ Available' : '❌ Missing'}`);
+
+    const cookieStatus = settingsService.getCookieStatus();
+    if (cookieStatus.hasCookies) {
+      console.log(`🍪 Cookies Status: ✅ Active (${cookieStatus.source}, ${cookieStatus.sizeBytes} bytes) - YouTube bot protection bypass enabled.`);
+    } else {
+      console.log(`🍪 Cookies Status: ⚠️ No cookies found. (Tip: Set YOUTUBE_COOKIES in Render Environment Variables)`);
+    }
+
+    const activeProxy = settingsService.getActiveProxy();
+    if (activeProxy) {
+      console.log(`🌐 Proxy Status: ✅ Active (${activeProxy.replace(/:[^:]*@/, ':***@')})`);
+    } else {
+      console.log(`🌐 Proxy Status: ℹ️ Direct connection (No proxy configured)`);
+    }
+
+    console.log(`📱 YouTube Extractor Clients: ${settingsService.getExtractorClients()}`);
+
+    // Check for yt-dlp updates in the background on startup
+    ytdlpService.autoUpdateYtDlp().catch(() => {});
+  } catch (err: any) {
+    console.warn(`Startup diagnostics warning: ${err.message}`);
   }
 });
 

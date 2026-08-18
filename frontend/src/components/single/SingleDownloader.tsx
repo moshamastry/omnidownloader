@@ -34,11 +34,13 @@ import { SeoContentSection } from '../seo/SeoContentSection';
 interface SingleDownloaderProps {
   initialUrl?: string;
   onClearInitialUrl?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ 
   initialUrl = '', 
-  onClearInitialUrl 
+  onClearInitialUrl,
+  onOpenSettings,
 }) => {
   const { isPro, quota, openAuthModal, refreshQuota } = useAuth();
   const [url, setUrl] = useState<string>(initialUrl);
@@ -319,12 +321,22 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold text-red-700 dark:text-red-300">Extraction Notice</p>
-            <p className="text-xs text-red-600/90 dark:text-red-400/90 leading-relaxed">{errorMessage}</p>
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-red-700 dark:text-red-300">Extraction Notice</p>
+              <p className="text-xs text-red-600/90 dark:text-red-400/90 leading-relaxed">{errorMessage}</p>
+            </div>
           </div>
+          {onOpenSettings && (errorMessage.includes('Settings') || errorMessage.includes('cookies') || errorMessage.includes('bot')) && (
+            <button
+              onClick={onOpenSettings}
+              className="self-start sm:self-center shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 text-xs font-bold transition-all border border-red-500/30"
+            >
+              <span>⚙️ Open Cookies Manager</span>
+            </button>
+          )}
         </div>
       )}
 

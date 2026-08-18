@@ -202,6 +202,7 @@ export const AppContent: React.FC = () => {
             <SingleDownloader
               initialUrl={pastedUrl}
               onClearInitialUrl={() => setPastedUrl('')}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
 

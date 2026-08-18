@@ -147,12 +147,59 @@ export class SettingsService {
    */
   private initEnvCookies() {
     try {
-      const rawEnvCookies =
+      let rawEnvCookies =
         process.env.YOUTUBE_COOKIES ||
         process.env.COOKIES_CONTENT ||
         process.env.COOKIES_DATA ||
         process.env.COOKIES_BASE64 ||
+        process.env.YT_COOKIES ||
+        process.env.YOUTUBE_COOKIE ||
+        process.env.COOKIES ||
+        process.env.COOKIE ||
+        process.env.COOKIES_TXT ||
+        process.env.YOUTUBE_COOKIES_TXT ||
         '';
+
+      // Dynamically scan process.env for any variable containing cookies data
+      if (!rawEnvCookies || rawEnvCookies.trim().length < 10) {
+        for (const [key, val] of Object.entries(process.env)) {
+          if (!val || typeof val !== 'string') continue;
+          const kLower = key.toLowerCase();
+          const vLower = val.toLowerCase();
+          if (
+            kLower.includes('cookie') ||
+            kLower.includes('youtube') ||
+            vLower.includes('.youtube.com') ||
+            vLower.includes('visitor_info1_live') ||
+            vLower.includes('netscape') ||
+            (vLower.includes('true') && vLower.includes('sid'))
+          ) {
+            if (val.trim().length > 10) {
+              console.log(`🍪 [SettingsService] Auto-detected cookies in env variable: ${key}`);
+              rawEnvCookies = val;
+              break;
+            }
+          }
+        }
+      }
+
+      // Check /etc/secrets directory for Render Secret Files
+      try {
+        if (fs.existsSync('/etc/secrets')) {
+          const secretFiles = fs.readdirSync('/etc/secrets');
+          for (const f of secretFiles) {
+            const fPath = path.join('/etc/secrets', f);
+            if (fs.statSync(fPath).isFile()) {
+              const fileData = fs.readFileSync(fPath, 'utf-8');
+              if (fileData.length > 10 && (f.includes('cookie') || fileData.includes('youtube') || fileData.includes('TRUE'))) {
+                console.log(`🍪 [SettingsService] Auto-detected cookies in secret file: ${fPath}`);
+                rawEnvCookies = fileData;
+                break;
+              }
+            }
+          }
+        }
+      } catch {}
 
       if (rawEnvCookies && rawEnvCookies.trim().length > 10) {
         const content = this.normalizeNetscapeCookies(rawEnvCookies);
@@ -245,8 +292,8 @@ export class SettingsService {
   /**
    * Resolves the path to the active cookies file from multiple prioritized sources:
    * 1. Environment variable content file (env_cookies.txt)
-   * 2. Custom path from env (YOUTUBE_COOKIES_PATH / COOKIES_FILE_PATH)
-   * 3. Render Secret File (/etc/secrets/cookies.txt or /etc/secrets/youtube_cookies.txt)
+   * 2. Render Secret File (/etc/secrets/cookies.txt or any file in /etc/secrets)
+   * 3. Custom path from env (YOUTUBE_COOKIES_PATH / COOKIES_FILE_PATH)
    * 4. App data cookies file (data/cookies.txt)
    * 5. Workspace root cookies file (cookies.txt or fb_cookies.txt)
    */
@@ -256,24 +303,25 @@ export class SettingsService {
       return this.envCookiesFile;
     }
 
-    // 2. Custom env path
+    // 2. Render Secret Files (/etc/secrets/...)
+    try {
+      if (fs.existsSync('/etc/secrets')) {
+        const secretFiles = fs.readdirSync('/etc/secrets');
+        for (const f of secretFiles) {
+          const fPath = path.join('/etc/secrets', f);
+          if (fs.statSync(fPath).isFile() && fs.statSync(fPath).size > 10) {
+            return fPath;
+          }
+        }
+      }
+    } catch {}
+
+    // 3. Custom env path
     const customEnvPath = process.env.YOUTUBE_COOKIES_PATH || process.env.COOKIES_FILE_PATH || process.env.COOKIES_FILE;
     if (customEnvPath) {
       const resolvedCustom = path.resolve(customEnvPath);
       if (fs.existsSync(resolvedCustom) && fs.statSync(resolvedCustom).size > 10) {
         return resolvedCustom;
-      }
-    }
-
-    // 3. Render Secret File default mount paths
-    const renderSecretPaths = [
-      '/etc/secrets/cookies.txt',
-      '/etc/secrets/youtube_cookies.txt',
-      '/etc/secrets/youtube.txt',
-    ];
-    for (const secPath of renderSecretPaths) {
-      if (fs.existsSync(secPath) && fs.statSync(secPath).size > 10) {
-        return secPath;
       }
     }
 

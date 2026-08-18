@@ -298,6 +298,11 @@ export class SettingsService {
    * 5. Workspace root cookies file (cookies.txt or fb_cookies.txt)
    */
   public getCookiesFilePath(): string | null {
+    // Re-check env cookies dynamically if not yet loaded
+    if (!fs.existsSync(this.envCookiesFile) || fs.statSync(this.envCookiesFile).size < 10) {
+      this.initEnvCookies();
+    }
+
     // 1. Env cookies file
     if (fs.existsSync(this.envCookiesFile) && fs.statSync(this.envCookiesFile).size > 10) {
       return this.envCookiesFile;
@@ -330,7 +335,16 @@ export class SettingsService {
       return this.cookiesFile;
     }
 
-    // 5. Root directory cookies
+    // 5. Memory cookies content (write if not on disk)
+    if (this.settings.cookiesContent && this.settings.cookiesContent.trim().length > 10) {
+      try {
+        const clean = this.normalizeNetscapeCookies(this.settings.cookiesContent);
+        fs.writeFileSync(this.cookiesFile, clean, 'utf-8');
+        return this.cookiesFile;
+      } catch {}
+    }
+
+    // 6. Root directory cookies
     const rootCookies = path.resolve(process.cwd(), 'cookies.txt');
     if (fs.existsSync(rootCookies) && fs.statSync(rootCookies).size > 10) {
       return rootCookies;

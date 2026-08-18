@@ -44,11 +44,102 @@ export class SettingsService {
       theme: 'dark',
       proxyUrl: process.env.PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.YTDLP_PROXY || '',
       cookiesContent: '',
-      extractorClients: process.env.YTDLP_EXTRACTOR_CLIENTS || 'android,ios,mweb,web',
+      extractorClients: process.env.YTDLP_EXTRACTOR_CLIENTS || 'android_vr,android_creator,android,ios,mweb',
     };
 
     this.initEnvCookies();
     this.loadSettings();
+  }
+
+  /**
+   * Normalizes cookies string into standard Netscape format with tabs
+   * Handles space conversions caused by web UI inputs or Render environment variable editors
+   */
+  public normalizeNetscapeCookies(raw?: string): string {
+    if (!raw || typeof raw !== 'string') return '';
+    let text = raw.trim();
+
+    if (
+      (text.startsWith('"') && text.endsWith('"')) ||
+      (text.startsWith("'") && text.endsWith("'"))
+    ) {
+      text = text.slice(1, -1);
+    }
+
+    if (text.includes('\\n')) {
+      text = text.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+    }
+
+    // Check if cookies content is Base64 encoded
+    if (
+      !text.includes('\n') &&
+      !text.includes('\t') &&
+      /^[A-Za-z0-9+/=\r\n]+$/.test(text)
+    ) {
+      try {
+        const decoded = Buffer.from(text, 'base64').toString('utf-8');
+        if (decoded.includes('\t') || decoded.includes('youtube') || decoded.includes('TRUE')) {
+          text = decoded;
+        }
+      } catch {}
+    }
+
+    const lines = text.split(/\r?\n/);
+    const cleanLines: string[] = [];
+
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+      if (line.startsWith('#')) {
+        cleanLines.push(line);
+        continue;
+      }
+
+      // If it already has tabs, keep it
+      if (line.includes('\t')) {
+        cleanLines.push(line);
+        continue;
+      }
+
+      // If it has spaces instead of tabs (Render env var converts tabs to spaces)
+      // Matches: Domain Flag Path Secure Expiry Name Value
+      const parts = line.split(/\s+/);
+      if (parts.length >= 7) {
+        const domain = parts[0];
+        const flag = parts[1].toUpperCase();
+        const pathVal = parts[2];
+        const secure = parts[3].toUpperCase();
+        const expiry = parts[4];
+        const name = parts[5];
+        const value = parts.slice(6).join(' ');
+        cleanLines.push([domain, flag, pathVal, secure, expiry, name, value].join('\t'));
+        continue;
+      }
+
+      // If key=value format (e.g. raw cookie header string)
+      if (line.includes('=')) {
+        const pairs = line.split(';');
+        for (const pair of pairs) {
+          const [k, ...v] = pair.trim().split('=');
+          if (k && v.length > 0) {
+            cleanLines.push([
+              '.youtube.com',
+              'TRUE',
+              '/',
+              'TRUE',
+              '2147483647',
+              k.trim(),
+              v.join('=').trim()
+            ].join('\t'));
+          }
+        }
+        continue;
+      }
+
+      cleanLines.push(line);
+    }
+
+    return '# Netscape HTTP Cookie File\n' + cleanLines.join('\n') + '\n';
   }
 
   /**
@@ -64,34 +155,7 @@ export class SettingsService {
         '';
 
       if (rawEnvCookies && rawEnvCookies.trim().length > 10) {
-        let content = rawEnvCookies.trim();
-
-        // Strip enclosing quotes if passed by env manager
-        if (
-          (content.startsWith('"') && content.endsWith('"')) ||
-          (content.startsWith("'") && content.endsWith("'"))
-        ) {
-          content = content.slice(1, -1);
-        }
-
-        // Handle escaped \n, \r, and \t from JSON or single-line env vars
-        if (content.includes('\\n')) {
-          content = content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
-        }
-
-        // Check if cookies content is Base64 encoded
-        if (
-          !content.includes('\t') &&
-          !content.includes('# Netscape') &&
-          /^[A-Za-z0-9+/=\r\n]+$/.test(content)
-        ) {
-          try {
-            const decoded = Buffer.from(content, 'base64').toString('utf-8');
-            if (decoded.includes('\t') || decoded.includes('youtube') || decoded.includes('TRUE')) {
-              content = decoded;
-            }
-          } catch {}
-        }
+        const content = this.normalizeNetscapeCookies(rawEnvCookies);
 
         // Write to data/env_cookies.txt, data/cookies.txt, and root cookies.txt for maximum compatibility
         fs.writeFileSync(this.envCookiesFile, content, 'utf-8');
@@ -100,7 +164,7 @@ export class SettingsService {
           fs.writeFileSync(path.resolve(process.cwd(), 'cookies.txt'), content, 'utf-8');
         } catch {}
 
-        console.log(`🍪 [SettingsService] Successfully loaded & synchronized YouTube cookies (${content.length} bytes).`);
+        console.log(`🍪 [SettingsService] Successfully normalized & loaded YouTube cookies (${content.length} bytes).`);
       }
     } catch (err: any) {
       console.error('⚠️ [SettingsService] Error writing env cookies:', err.message);
@@ -125,10 +189,7 @@ export class SettingsService {
     try {
       fs.writeFileSync(this.settingsFile, JSON.stringify(this.settings, null, 2), 'utf-8');
       if (this.settings.cookiesContent !== undefined) {
-        let cleanCookies = (this.settings.cookiesContent || '').trim();
-        if (cleanCookies.includes('\\n')) {
-          cleanCookies = cleanCookies.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
-        }
+        const cleanCookies = this.normalizeNetscapeCookies(this.settings.cookiesContent);
         fs.writeFileSync(this.cookiesFile, cleanCookies, 'utf-8');
         try {
           fs.writeFileSync(path.resolve(process.cwd(), 'cookies.txt'), cleanCookies, 'utf-8');
@@ -177,7 +238,7 @@ export class SettingsService {
     return (
       this.settings.extractorClients?.trim() ||
       process.env.YTDLP_EXTRACTOR_CLIENTS?.trim() ||
-      'android,ios,mweb,web'
+      'android_vr,android_creator,android,ios,mweb'
     );
   }
 

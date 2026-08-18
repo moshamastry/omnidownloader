@@ -330,9 +330,13 @@ export class YtDlpService {
   private cleanErrorMessage(rawError: string, platform: string): string {
     const lower = rawError.toLowerCase();
     if (
-      lower.includes('sign in to confirm you\'re not a bot') ||
+      lower.includes('sign in to confirm') ||
       lower.includes('confirm you\'re not a bot') ||
-      lower.includes('bot verification')
+      lower.includes('bot verification') ||
+      lower.includes('automated queries') ||
+      lower.includes('--cookies-from-browser') ||
+      lower.includes('exporting-youtube-cookies') ||
+      lower.includes('sign in with your google account')
     ) {
       const cookieStatus = settingsService.getCookieStatus();
       if (!cookieStatus.hasCookies) {
@@ -734,7 +738,8 @@ export class YtDlpService {
         '--no-playlist',
         '--no-warnings',
         '--socket-timeout', '25',
-        '--extractor-args', `youtube:player_client=${activeClients}`,
+        '--extractor-args', `youtube:player_client=${activeClients};player_skip=configs`,
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         '--skip-download',
       ];
 
@@ -809,18 +814,23 @@ export class YtDlpService {
         lowerErr.includes('confirm you\'re not a bot');
 
       if (isBotOrAuth) {
-        console.warn(`⚠️ [YouTube] Default clients failed. Retrying with client fallback: 'android'...`);
-        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'android');
+        console.warn(`⚠️ [YouTube] Default clients failed. Retrying with client fallback: 'android_vr,android_creator'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'android_vr,android_creator');
       }
 
       if (execResult.code !== 0 && isBotOrAuth) {
-        console.warn(`⚠️ [YouTube] Fallback client 'android' failed. Retrying with client fallback: 'ios,mweb'...`);
-        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'ios,mweb');
+        console.warn(`⚠️ [YouTube] Fallback 'android_vr' failed. Retrying with client fallback: 'android,ios'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'android,ios');
       }
 
       if (execResult.code !== 0 && isBotOrAuth) {
-        console.warn(`⚠️ [YouTube] Fallback client 'ios,mweb' failed. Retrying with client fallback: 'tv_embedded,web'...`);
-        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'tv_embedded,web');
+        console.warn(`⚠️ [YouTube] Fallback 'android,ios' failed. Retrying with client fallback: 'mweb,tv_embedded'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'mweb,tv_embedded');
+      }
+
+      if (execResult.code !== 0 && isBotOrAuth) {
+        console.warn(`⚠️ [YouTube] Fallback 'mweb,tv_embedded' failed. Retrying with client fallback: 'tv,web_creator'...`);
+        execResult = await this.executeYtDlpSingleJson(cleanUrl, 'tv,web_creator');
       }
     }
 
@@ -1103,7 +1113,8 @@ export class YtDlpService {
         '--no-playlist',
         '--no-warnings',
         '--socket-timeout', '30',
-        '--extractor-args', `youtube:player_client=${clientsStr}`,
+        '--extractor-args', `youtube:player_client=${clientsStr};player_skip=configs`,
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         '--concurrent-fragments', '5',
         '--buffer-size', '1024k',
         '--http-chunk-size', '10M',
@@ -1276,11 +1287,11 @@ export class YtDlpService {
         const isBot = lowerErr.includes('sign in') || lowerErr.includes('bot') || lowerErr.includes('confirm you\'re not a bot');
 
         if (isBot) {
-          console.warn(`⚠️ [YouTube Download] Client '${activeClients}' failed. Retrying with 'android'...`);
+          console.warn(`⚠️ [YouTube Download] Client '${activeClients}' failed. Retrying with 'android_vr,android_creator'...`);
           runRes = await this.runYtDlpDownload(
             resolvedUrl,
             outputTemplate,
-            'android',
+            'android_vr,android_creator',
             req.preset || 'best-video-mp4',
             req.customFormatId,
             onProgress,
@@ -1291,11 +1302,11 @@ export class YtDlpService {
         }
 
         if (runRes.code !== 0 && isBot && !canceled) {
-          console.warn(`⚠️ [YouTube Download] Fallback 'android' failed. Retrying with 'ios,mweb'...`);
+          console.warn(`⚠️ [YouTube Download] Fallback 'android_vr,android_creator' failed. Retrying with 'android,ios'...`);
           runRes = await this.runYtDlpDownload(
             resolvedUrl,
             outputTemplate,
-            'ios,mweb',
+            'android,ios',
             req.preset || 'best-video-mp4',
             req.customFormatId,
             onProgress,
@@ -1306,11 +1317,26 @@ export class YtDlpService {
         }
 
         if (runRes.code !== 0 && isBot && !canceled) {
-          console.warn(`⚠️ [YouTube Download] Fallback 'ios,mweb' failed. Retrying with 'tv_embedded,web'...`);
+          console.warn(`⚠️ [YouTube Download] Fallback 'android,ios' failed. Retrying with 'mweb,tv_embedded'...`);
           runRes = await this.runYtDlpDownload(
             resolvedUrl,
             outputTemplate,
-            'tv_embedded,web',
+            'mweb,tv_embedded',
+            req.preset || 'best-video-mp4',
+            req.customFormatId,
+            onProgress,
+            req.id,
+            () => canceled,
+            (cp) => { childProcess = cp; }
+          );
+        }
+
+        if (runRes.code !== 0 && isBot && !canceled) {
+          console.warn(`⚠️ [YouTube Download] Fallback 'mweb,tv_embedded' failed. Retrying with 'tv,web_creator'...`);
+          runRes = await this.runYtDlpDownload(
+            resolvedUrl,
+            outputTemplate,
+            'tv,web_creator',
             req.preset || 'best-video-mp4',
             req.customFormatId,
             onProgress,

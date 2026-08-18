@@ -1132,27 +1132,27 @@ export class YtDlpService {
       }
 
       if (preset === 'best-video-mp4') {
-        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*+ba/b/best', '--merge-output-format', 'mp4');
       } else if (preset === '1080p-mp4') {
-        args.push('-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]/bv*+ba/b/best', '--merge-output-format', 'mp4');
       } else if (preset === '720p-mp4') {
-        args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/best[height<=720]/bv*+ba/b/best', '--merge-output-format', 'mp4');
       } else if (preset === '480p-mp4') {
-        args.push('-f', 'bv*[height<=480]+ba/b[height<=480]/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=480]+ba/b[height<=480]/best[height<=480]/bv*+ba/b/best', '--merge-output-format', 'mp4');
       } else if (preset === '360p-mp4') {
-        args.push('-f', 'bv*[height<=360]+ba/b[height<=360]/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*[height<=360]+ba/b[height<=360]/best[height<=360]/18/b/best', '--merge-output-format', 'mp4');
       } else if (preset === 'mp3-320' || preset === 'best-audio-mp3') {
-        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '320K');
+        args.push('-f', 'ba/b/best', '-x', '--audio-format', 'mp3', '--audio-quality', '320K');
       } else if (preset === 'mp3-128') {
-        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '128K');
+        args.push('-f', 'ba/b/best', '-x', '--audio-format', 'mp3', '--audio-quality', '128K');
       } else if (preset === 'm4a-best' || preset === 'audio-m4a') {
-        args.push('-x', '--audio-format', 'm4a');
+        args.push('-f', 'ba/b/best', '-x', '--audio-format', 'm4a');
       } else if (preset === 'audio-wav') {
-        args.push('-x', '--audio-format', 'wav');
+        args.push('-f', 'ba/b/best', '-x', '--audio-format', 'wav');
       } else if (customFormatId) {
         args.push('-f', customFormatId);
       } else {
-        args.push('-f', 'bv*+ba/b', '--merge-output-format', 'mp4');
+        args.push('-f', 'bv*+ba/b/best', '--merge-output-format', 'mp4');
       }
 
       args.push(resolvedUrl);
@@ -1280,6 +1280,22 @@ export class YtDlpService {
         () => canceled,
         (cp) => { childProcess = cp; }
       );
+
+      // If format was not available, retry with universal fallback format
+      if (runRes.code !== 0 && !canceled && runRes.lastError.toLowerCase().includes('requested format is not available')) {
+        console.warn(`⚠️ [YouTube Download] Requested format not available. Retrying with universal format 'b/best'...`);
+        runRes = await this.runYtDlpDownload(
+          resolvedUrl,
+          outputTemplate,
+          activeClients,
+          'best',
+          'b/best/bv*+ba',
+          onProgress,
+          req.id,
+          () => canceled,
+          (cp) => { childProcess = cp; }
+        );
+      }
 
       // If YouTube download encounters bot detection, automatically retry with fallback clients!
       if (runRes.code !== 0 && platform === 'YouTube' && !canceled) {
